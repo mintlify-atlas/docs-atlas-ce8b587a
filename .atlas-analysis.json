@@ -1,0 +1,53 @@
+{
+  "projectType": "data-platform",
+  "projectName": "BD Scan Face",
+  "projectDescription": "Face recognition and access control database system with Prisma ORM and PostgreSQL backend",
+  "theme": "aspen",
+  "primaryColor": "#848c8e",
+  "lightColor": "#11161e",
+  "darkColor": "#cfd0d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart", "installation"]
+          },
+          {
+            "group": "Database",
+            "pages": ["database/schema", "database/models", "database/migrations"]
+          },
+          {
+            "group": "Guides",
+            "pages": ["guides/setup", "guides/prisma-client", "guides/docker"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Models",
+            "pages": ["api/user", "api/face", "api/device", "api/access-log", "api/user-type"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Face encoding storage and management",
+    "User access control with device tracking",
+    "PostgreSQL database with Prisma ORM",
+    "Comprehensive access logging with confidence scores",
+    "Multi-device support with location tracking"
+  ],
+  "publicApiSurface": [
+    "UserType model - User role management",
+    "User model - User registration and profile data",
+    "Face model - Face encoding storage",
+    "Device model - Access control device registry",
+    "AccessLog model - Access attempt logging"
+  ]
+}
