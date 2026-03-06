@@ -1,0 +1,115 @@
+---
+title: Introduction
+description: Face recognition and access control database system with Prisma ORM and PostgreSQL backend
+---
+
+<div className="bg-[#020627] text-white rounded-xl border border-[#60639e] p-12 mb-8">
+  <h1 className="font-inter font-bold text-5xl mb-4" style={{ color: '#ffffff' }}>
+    BD Scan Face
+  </h1>
+  <p className="text-xl mb-8 opacity-90">
+    Face recognition and access control database system with Prisma ORM and PostgreSQL backend
+  </p>
+  <div className="flex gap-4">
+    <a 
+      href="/quickstart" 
+      className="px-6 py-3 rounded-md font-semibold transition-colors"
+      style={{ backgroundColor: '#238636', color: '#ffffff' }}
+    >
+      Get Started
+    </a>
+    <a 
+      href="https://github.com/ErnestoJuarez2708/BD_Scan_Face" 
+      className="px-6 py-3 rounded-md font-semibold border transition-colors"
+      style={{ backgroundColor: 'transparent', color: '#ffffff', borderColor: '#60639e' }}
+    >
+      View on GitHub
+    </a>
+  </div>
+</div>
+
+## Overview
+
+BD Scan Face is a comprehensive database system designed for face recognition and access control applications. Built on PostgreSQL with Prisma ORM, it provides a robust foundation for managing users, facial encodings, devices, and access logs with high confidence scoring.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Face Encoding Storage" icon="face-viewfinder" href="/database/models">
+    Store and manage facial recognition encodings with associated user profiles
+  </Card>
+  <Card title="Access Control" icon="shield-check" href="/api/access-log">
+    Track access attempts with confidence scores and device-specific logging
+  </Card>
+  <Card title="Multi-Device Support" icon="computer" href="/api/device">
+    Register and manage multiple access control devices with location tracking
+  </Card>
+  <Card title="User Management" icon="users" href="/api/user">
+    Comprehensive user profiles with role-based access and status tracking
+  </Card>
+</CardGroup>
+
+## Database Architecture
+
+The system is built around five core models:
+
+- **UserType** - Role and permission management for different user categories
+- **User** - User profiles with identification, contact info, and access codes
+- **Face** - Facial recognition encodings linked to user accounts
+- **Device** - Access control hardware with IP addresses and locations
+- **AccessLog** - Detailed records of all access attempts with timestamps and confidence levels
+
+## Use Cases
+
+<Note>
+  BD Scan Face is ideal for organizations requiring secure, trackable access control systems with facial recognition capabilities.
+</Note>
+
+### Common Applications
+
+- **Corporate Security** - Control building access with facial recognition
+- **Time Tracking** - Log employee attendance via face scan devices
+- **Multi-Location Management** - Monitor access across different office locations
+- **Audit Compliance** - Maintain detailed access logs with confidence metrics
+
+## Technology Stack
+
+- **Database**: PostgreSQL 15
+- **ORM**: Prisma Client
+- **Type Safety**: TypeScript with strict mode
+- **Deployment**: Docker Compose ready
+
+## Getting Started
+
+<CardGroup cols={3}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up your development environment
+  </Card>
+  <Card title="Database Schema" icon="database" href="/database/schema">
+    Explore the data model
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<Steps>
+  <Step title="Set Up Your Environment">
+    Follow the [installation guide](/installation) to configure PostgreSQL and Node.js
+  </Step>
+  <Step title="Run Migrations">
+    Apply database migrations to create the schema
+  </Step>
+  <Step title="Generate Prisma Client">
+    Generate the type-safe database client for your application
+  </Step>
+  <Step title="Start Building">
+    Use the Prisma Client to interact with your face recognition database
+  </Step>
+</Steps>
+
+<Info>
+  Check out the [API Reference](/api/user) to explore all available models and their relationships.
+</Info>

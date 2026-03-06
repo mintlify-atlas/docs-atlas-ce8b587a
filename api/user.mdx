@@ -1,0 +1,271 @@
+---
+title: 'User'
+description: 'User model representing individuals in the facial recognition system'
+---
+
+## Overview
+
+The User model represents individuals registered in the BD Scan Face system. Each user has biometric face data, access logs, and is associated with a user type that defines their role and permissions.
+
+## Model Fields
+
+<ParamField path="user_id" type="Int" required>
+  Primary key. Auto-incremented unique identifier for the user.
+</ParamField>
+
+<ParamField path="ci" type="String" required>
+  Cedula de Identidad (ID document number). Must be unique across all users. Maximum 20 characters.
+</ParamField>
+
+<ParamField path="first_name" type="String" required>
+  User's first name. Maximum 100 characters.
+</ParamField>
+
+<ParamField path="last_name" type="String" required>
+  User's last name. Maximum 100 characters.
+</ParamField>
+
+<ParamField path="email" type="String" required>
+  User's email address. Must be unique across all users. Maximum 100 characters.
+</ParamField>
+
+<ParamField path="phone" type="String | null">
+  Optional phone number. Maximum 20 characters.
+</ParamField>
+
+<ParamField path="user_type_id" type="Int" required>
+  Foreign key reference to the UserType model. Defines the user's role in the system.
+</ParamField>
+
+<ParamField path="code" type="Int" required>
+  Unique numeric code for the user. Can be used for manual identification or entry.
+</ParamField>
+
+<ParamField path="status" type="Boolean" default="true">
+  Indicates whether the user account is active. Defaults to true.
+</ParamField>
+
+<ParamField path="registration_date" type="DateTime" default="now()">
+  Timestamp when the user was registered in the system. Automatically set to current time.
+</ParamField>
+
+## Relationships
+
+<ParamField path="user_type" type="UserType">
+  The UserType associated with this user. Defines role and permissions.
+</ParamField>
+
+<ParamField path="faces" type="Face[]">
+  Array of Face records containing biometric encoding data for this user.
+</ParamField>
+
+<ParamField path="access_logs" type="AccessLog[]">
+  Array of AccessLog records tracking this user's access events across devices.
+</ParamField>
+
+## Query Examples
+
+### Find All Users
+
+```typescript
+const users = await prisma.user.findMany({
+  include: {
+    user_type: true,
+    faces: true,
+    _count: {
+      select: { access_logs: true }
+    }
+  },
+  orderBy: {
+    registration_date: 'desc'
+  }
+});
+```
+
+### Find User by ID
+
+```typescript
+const user = await prisma.user.findUnique({
+  where: {
+    user_id: 1
+  },
+  include: {
+    user_type: true,
+    faces: {
+      orderBy: {
+        upload_date: 'desc'
+      }
+    },
+    access_logs: {
+      take: 10,
+      orderBy: {
+        access_date: 'desc'
+      },
+      include: {
+        device: true
+      }
+    }
+  }
+});
+```
+
+### Find User by CI or Email
+
+```typescript
+const userByCi = await prisma.user.findUnique({
+  where: {
+    ci: '12345678'
+  },
+  include: {
+    user_type: true
+  }
+});
+
+const userByEmail = await prisma.user.findUnique({
+  where: {
+    email: 'user@example.com'
+  }
+});
+```
+
+### Find User by Code
+
+```typescript
+const userByCode = await prisma.user.findUnique({
+  where: {
+    code: 1001
+  },
+  include: {
+    user_type: true,
+    faces: true
+  }
+});
+```
+
+### Create New User
+
+```typescript
+const newUser = await prisma.user.create({
+  data: {
+    ci: '12345678',
+    first_name: 'John',
+    last_name: 'Doe',
+    email: 'john.doe@example.com',
+    phone: '+1234567890',
+    user_type_id: 1,
+    code: 1001,
+    status: true
+  },
+  include: {
+    user_type: true
+  }
+});
+```
+
+### Update User
+
+```typescript
+const updatedUser = await prisma.user.update({
+  where: {
+    user_id: 1
+  },
+  data: {
+    phone: '+9876543210',
+    email: 'newemail@example.com',
+    status: false
+  },
+  include: {
+    user_type: true
+  }
+});
+```
+
+### Delete User
+
+```typescript
+// Note: Consider cascading deletes for related faces and access_logs
+const deletedUser = await prisma.user.delete({
+  where: {
+    user_id: 1
+  }
+});
+```
+
+### Filter Active Users by Type
+
+```typescript
+const activeEmployees = await prisma.user.findMany({
+  where: {
+    status: true,
+    user_type: {
+      type_name: 'Employee'
+    }
+  },
+  include: {
+    user_type: true,
+    faces: true
+  },
+  orderBy: {
+    last_name: 'asc'
+  }
+});
+```
+
+### Search Users by Name
+
+```typescript
+const searchResults = await prisma.user.findMany({
+  where: {
+    OR: [
+      {
+        first_name: {
+          contains: 'John',
+          mode: 'insensitive'
+        }
+      },
+      {
+        last_name: {
+          contains: 'John',
+          mode: 'insensitive'
+        }
+      }
+    ],
+    status: true
+  },
+  include: {
+    user_type: true
+  }
+});
+```
+
+### Get Users with Recent Access
+
+```typescript
+const recentlyActiveUsers = await prisma.user.findMany({
+  where: {
+    access_logs: {
+      some: {
+        access_date: {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
+        }
+      }
+    }
+  },
+  include: {
+    user_type: true,
+    _count: {
+      select: { access_logs: true }
+    }
+  }
+});
+```
+
+## Unique Constraints
+
+- `ci`: Must be unique across all users
+- `email`: Must be unique across all users
+- `code`: Must be unique across all users
+
+## Database Mapping
+
+This model maps to the `users` table in the database.

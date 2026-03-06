@@ -1,0 +1,468 @@
+---
+title: 'AccessLog'
+description: 'AccessLog model tracking all facial recognition access attempts'
+---
+
+## Overview
+
+The AccessLog model records every access attempt in the BD Scan Face system. It captures information about who attempted access, which device they used, when the attempt occurred, and the confidence level of the facial recognition match.
+
+## Model Fields
+
+<ParamField path="log_id" type="Int" required>
+  Primary key. Auto-incremented unique identifier for the access log entry.
+</ParamField>
+
+<ParamField path="user_id" type="Int | null">
+  Foreign key reference to the User model. Nullable to allow logging of unrecognized access attempts or manual code entries.
+</ParamField>
+
+<ParamField path="device_id" type="Int" required>
+  Foreign key reference to the Device model. Identifies which device recorded this access attempt.
+</ParamField>
+
+<ParamField path="access_date" type="DateTime" default="now()">
+  Timestamp when the access attempt occurred. Automatically set to current time.
+</ParamField>
+
+<ParamField path="confidence" type="Decimal" required>
+  Confidence score of the facial recognition match. Decimal with precision 5 and scale 2 (e.g., 99.75). Range typically 0.00 to 100.00.
+</ParamField>
+
+<ParamField path="access_type" type="String | null">
+  Type of access attempt. Maximum 20 characters. Examples: "face", "code", "manual", "rfid".
+</ParamField>
+
+<ParamField path="status" type="String | null">
+  Result of the access attempt. Maximum 20 characters. Examples: "granted", "denied", "pending".
+</ParamField>
+
+<ParamField path="enterCode" type="Boolean" default="false">
+  Indicates whether the user entered a manual code for access. Defaults to false. True when access was via numeric code instead of facial recognition.
+</ParamField>
+
+## Relationships
+
+<ParamField path="user" type="User | null">
+  The User who attempted access. Nullable for unrecognized faces or anonymous access attempts.
+</ParamField>
+
+<ParamField path="device" type="Device">
+  The Device where the access attempt was recorded. Always required.
+</ParamField>
+
+## Query Examples
+
+### Find All Access Logs
+
+```typescript
+const accessLogs = await prisma.accessLog.findMany({
+  include: {
+    user: {
+      select: {
+        user_id: true,
+        first_name: true,
+        last_name: true,
+        ci: true
+      }
+    },
+    device: {
+      select: {
+        device_id: true,
+        name: true,
+        location: true
+      }
+    }
+  },
+  orderBy: {
+    access_date: 'desc'
+  },
+  take: 100
+});
+```
+
+### Find Access Log by ID
+
+```typescript
+const accessLog = await prisma.accessLog.findUnique({
+  where: {
+    log_id: 1
+  },
+  include: {
+    user: {
+      include: {
+        user_type: true
+      }
+    },
+    device: true
+  }
+});
+```
+
+### Create New Access Log
+
+```typescript
+const newLog = await prisma.accessLog.create({
+  data: {
+    user_id: 1,
+    device_id: 2,
+    confidence: 98.75,
+    access_type: 'face',
+    status: 'granted',
+    enterCode: false
+  },
+  include: {
+    user: true,
+    device: true
+  }
+});
+```
+
+### Create Access Log for Unrecognized Face
+
+```typescript
+const unknownAccessLog = await prisma.accessLog.create({
+  data: {
+    user_id: null, // No user recognized
+    device_id: 3,
+    confidence: 45.20,
+    access_type: 'face',
+    status: 'denied',
+    enterCode: false
+  },
+  include: {
+    device: true
+  }
+});
+```
+
+### Create Access Log for Manual Code Entry
+
+```typescript
+const codeAccessLog = await prisma.accessLog.create({
+  data: {
+    user_id: 5,
+    device_id: 1,
+    confidence: 100.00, // Full confidence for manual code
+    access_type: 'code',
+    status: 'granted',
+    enterCode: true
+  },
+  include: {
+    user: true,
+    device: true
+  }
+});
+```
+
+### Find Access Logs for a User
+
+```typescript
+const userAccessLogs = await prisma.accessLog.findMany({
+  where: {
+    user_id: 1
+  },
+  include: {
+    device: {
+      select: {
+        name: true,
+        location: true
+      }
+    }
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+```
+
+### Find Access Logs for a Device
+
+```typescript
+const deviceAccessLogs = await prisma.accessLog.findMany({
+  where: {
+    device_id: 2
+  },
+  include: {
+    user: {
+      select: {
+        first_name: true,
+        last_name: true,
+        ci: true,
+        user_type: true
+      }
+    }
+  },
+  orderBy: {
+    access_date: 'desc'
+  },
+  take: 50
+});
+```
+
+### Find Recent Access Logs
+
+```typescript
+const recentLogs = await prisma.accessLog.findMany({
+  where: {
+    access_date: {
+      gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
+    }
+  },
+  include: {
+    user: {
+      select: {
+        first_name: true,
+        last_name: true
+      }
+    },
+    device: {
+      select: {
+        name: true,
+        location: true
+      }
+    }
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+```
+
+### Find Granted Access Logs
+
+```typescript
+const grantedAccess = await prisma.accessLog.findMany({
+  where: {
+    status: 'granted'
+  },
+  include: {
+    user: true,
+    device: true
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+```
+
+### Find Denied Access Attempts
+
+```typescript
+const deniedAccess = await prisma.accessLog.findMany({
+  where: {
+    status: 'denied'
+  },
+  include: {
+    user: true,
+    device: {
+      select: {
+        name: true,
+        location: true
+      }
+    }
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+```
+
+### Find Low Confidence Access Attempts
+
+```typescript
+const lowConfidenceAccess = await prisma.accessLog.findMany({
+  where: {
+    confidence: {
+      lt: 70.00
+    }
+  },
+  include: {
+    user: true,
+    device: true
+  },
+  orderBy: [
+    {
+      confidence: 'asc'
+    },
+    {
+      access_date: 'desc'
+    }
+  ]
+});
+```
+
+### Find Access Logs by Type
+
+```typescript
+const faceAccessLogs = await prisma.accessLog.findMany({
+  where: {
+    access_type: 'face'
+  },
+  include: {
+    user: true,
+    device: true
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+
+const codeAccessLogs = await prisma.accessLog.findMany({
+  where: {
+    enterCode: true
+  },
+  include: {
+    user: true,
+    device: true
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+```
+
+### Find Unrecognized Access Attempts
+
+```typescript
+const unrecognizedAccess = await prisma.accessLog.findMany({
+  where: {
+    user_id: null
+  },
+  include: {
+    device: {
+      select: {
+        name: true,
+        location: true
+      }
+    }
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+```
+
+### Get Access Statistics for Date Range
+
+```typescript
+const startDate = new Date('2024-01-01');
+const endDate = new Date('2024-01-31');
+
+const accessStats = await prisma.accessLog.findMany({
+  where: {
+    access_date: {
+      gte: startDate,
+      lte: endDate
+    }
+  },
+  include: {
+    user: {
+      select: {
+        user_type: true
+      }
+    },
+    device: {
+      select: {
+        name: true
+      }
+    }
+  }
+});
+```
+
+### Find User's Last Access
+
+```typescript
+const lastAccess = await prisma.accessLog.findFirst({
+  where: {
+    user_id: 1,
+    status: 'granted'
+  },
+  orderBy: {
+    access_date: 'desc'
+  },
+  include: {
+    device: true
+  }
+});
+```
+
+### Delete Old Access Logs
+
+```typescript
+// Delete logs older than 90 days
+const deletedLogs = await prisma.accessLog.deleteMany({
+  where: {
+    access_date: {
+      lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    }
+  }
+});
+```
+
+### Get Access Count by Device
+
+```typescript
+const deviceAccessCounts = await prisma.accessLog.groupBy({
+  by: ['device_id'],
+  _count: {
+    log_id: true
+  },
+  orderBy: {
+    _count: {
+      log_id: 'desc'
+    }
+  }
+});
+```
+
+### Find Access Logs with High Confidence
+
+```typescript
+const highConfidenceAccess = await prisma.accessLog.findMany({
+  where: {
+    confidence: {
+      gte: 95.00
+    },
+    access_type: 'face'
+  },
+  include: {
+    user: true,
+    device: true
+  },
+  orderBy: {
+    access_date: 'desc'
+  }
+});
+```
+
+## Use Cases
+
+### Security Auditing
+
+- Track all access attempts (granted and denied)
+- Identify suspicious patterns or unauthorized access
+- Generate compliance reports
+
+### Confidence Scoring
+
+- The `confidence` field indicates facial recognition match quality
+- Low confidence scores may trigger additional verification
+- High confidence enables faster, seamless access
+
+### Access Methods
+
+- **Face Recognition**: `access_type: 'face'`, `enterCode: false`
+- **Manual Code**: `access_type: 'code'`, `enterCode: true`
+- **Hybrid**: System can support multiple authentication methods
+
+### Anonymous Attempts
+
+- `user_id: null` records unrecognized faces
+- Useful for security monitoring and system improvement
+- Can trigger alerts for repeated unknown access attempts
+
+## Database Mapping
+
+This model maps to the `access_logs` table in the database.

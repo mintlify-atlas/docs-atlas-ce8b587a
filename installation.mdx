@@ -1,0 +1,512 @@
+---
+title: 'Installation'
+description: 'Complete installation guide for BD Scan Face database system'
+---
+
+## Prerequisites
+
+Before installing BD Scan Face, ensure you have the following installed on your system:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    **Version 18.x or higher**
+    
+    Required for running TypeScript and Prisma
+  </Card>
+  <Card title="Docker" icon="docker">
+    **Docker & Docker Compose**
+    
+    For running PostgreSQL (recommended)
+  </Card>
+  <Card title="PostgreSQL" icon="database">
+    **Version 15 or higher**
+    
+    Alternative to Docker setup
+  </Card>
+  <Card title="Git" icon="git">
+    **Latest version**
+    
+    For cloning the repository
+  </Card>
+</CardGroup>
+
+<Info>
+This guide covers installation for development environments. For production deployments, ensure you use secure credentials and follow PostgreSQL security best practices.
+</Info>
+
+## Installation Methods
+
+Choose the installation method that best fits your workflow:
+
+### Method 1: With Docker (Recommended)
+
+The easiest way to get started is using Docker Compose, which automatically sets up PostgreSQL with the correct configuration.
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/ErnestoJuarez2708/BD_Scan_Face.git
+    cd BD_Scan_Face
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    <CodeGroup>
+    ```bash npm
+    npm install
+    ```
+
+    ```bash pnpm
+    pnpm install
+    ```
+
+    ```bash yarn
+    yarn install
+    ```
+    </CodeGroup>
+
+    This installs:
+    - `@prisma/client` (v6.19.2) - Type-safe database client
+    - `@prisma/adapter-pg` (v7.4.2) - PostgreSQL adapter for Prisma
+    - `prisma` (v7.4.2) - Prisma CLI and migration tools
+    - `typescript` (v5.9.3) - TypeScript compiler
+    - `tsx` (v4.21.0) - TypeScript execution engine
+    - `dotenv` (v17.3.1) - Environment variable management
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the project root:
+
+    ```bash .env
+    DATABASE_URL="postgresql://postgres:prisma@localhost:5432/postgres?schema=public"
+    ```
+
+    <Note>
+    These credentials match the Docker Compose configuration. You can customize them in both files if needed.
+    </Note>
+  </Step>
+
+  <Step title="Start PostgreSQL">
+    Launch the database container:
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    The Docker setup includes:
+    - PostgreSQL 15 on port 5432
+    - Automatic health checks
+    - Persistent data storage via Docker volumes
+    - Network isolation with `prisma-network`
+
+    Verify the container is running:
+
+    ```bash
+    docker ps
+    ```
+
+    Check database health:
+
+    ```bash
+    docker-compose logs postgres
+    ```
+  </Step>
+
+  <Step title="Initialize the Database">
+    Run migrations to create the database schema:
+
+    ```bash
+    npx prisma migrate deploy
+    ```
+
+    Generate the Prisma Client:
+
+    ```bash
+    npx prisma generate
+    ```
+
+    <Tip>
+    The Prisma Client is generated to `./generated/prisma/` as specified in your schema configuration.
+    </Tip>
+  </Step>
+
+  <Step title="Verify Installation">
+    Open Prisma Studio to browse your database:
+
+    ```bash
+    npx prisma studio
+    ```
+
+    This opens a web interface at `http://localhost:5555` where you can view and edit your data.
+  </Step>
+</Steps>
+
+### Method 2: With Existing PostgreSQL
+
+If you already have PostgreSQL installed, you can connect to it directly.
+
+<Steps>
+  <Step title="Clone and Install">
+    ```bash
+    git clone https://github.com/ErnestoJuarez2708/BD_Scan_Face.git
+    cd BD_Scan_Face
+    npm install
+    ```
+  </Step>
+
+  <Step title="Create Database">
+    Connect to PostgreSQL and create a database:
+
+    ```sql
+    CREATE DATABASE bd_scan_face;
+    ```
+  </Step>
+
+  <Step title="Configure Connection">
+    Create a `.env` file with your database connection string:
+
+    ```bash .env
+    DATABASE_URL="postgresql://username:password@localhost:5432/bd_scan_face?schema=public"
+    ```
+
+    Replace `username`, `password`, and database name with your actual PostgreSQL credentials.
+  </Step>
+
+  <Step title="Run Migrations">
+    ```bash
+    npx prisma migrate deploy
+    npx prisma generate
+    ```
+  </Step>
+</Steps>
+
+## Docker Compose Configuration
+
+The included `docker-compose.yml` provides a production-ready PostgreSQL setup:
+
+```yaml docker-compose.yml
+version: '3.7'
+services: 
+  postgres: 
+    image: postgres:15
+    restart: always
+    environment: 
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=prisma
+    ports: 
+      - "5432:5432"
+    networks: 
+      - prisma-network 
+    healthcheck: 
+      test: ["CMD-SHELL", "pg_isready -U prisma -d postgres"] 
+      interval: 5s
+      timeout: 2s
+      retries: 20
+    volumes: 
+      - postgres_data:/var/lib/postgresql/data
+    command: postgres -c listen_addresses='*'
+    logging: 
+      options: 
+        max-size: "10m"
+        max-file: "3"
+
+networks: 
+  prisma-network: 
+
+volumes: 
+  postgres_data:
+```
+
+<Warning>
+**Security Note:** The default credentials are for development only. For production environments:
+- Use strong, randomly generated passwords
+- Store credentials in secure secret management systems
+- Enable SSL/TLS connections
+- Restrict network access using firewalls
+</Warning>
+
+## Environment Variables
+
+BD Scan Face uses environment variables for configuration. Here's a complete reference:
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
+
+### Connection String Format
+
+```
+postgresql://[user]:[password]@[host]:[port]/[database]?schema=[schema]
+```
+
+**Parameters:**
+- `user` - Database username
+- `password` - Database password
+- `host` - Database host (e.g., `localhost`)
+- `port` - Database port (default: `5432`)
+- `database` - Database name
+- `schema` - PostgreSQL schema (default: `public`)
+
+### Connection Pooling
+
+For production environments, consider adding connection pooling parameters:
+
+```bash .env
+DATABASE_URL="postgresql://postgres:prisma@localhost:5432/postgres?schema=public&connection_limit=10&pool_timeout=20"
+```
+
+## Prisma Configuration
+
+The project uses a custom Prisma configuration file (`prisma.config.ts`):
+
+```typescript prisma.config.ts
+import "dotenv/config";
+import { defineConfig } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+  },
+  datasource: {
+    url: process.env["DATABASE_URL"],
+  },
+});
+```
+
+This configuration:
+- Automatically loads environment variables from `.env`
+- Sets the schema location to `prisma/schema.prisma`
+- Stores migrations in `prisma/migrations/`
+- Uses the `DATABASE_URL` environment variable for connection
+
+## Database Schema Overview
+
+After running migrations, your database will have the following structure:
+
+### Tables Created
+
+<AccordionGroup>
+  <Accordion title="user_types - User Classification">
+    Stores different types of users (e.g., employee, visitor, contractor).
+
+    ```sql
+    CREATE TABLE "user_types" (
+        "user_type_id" SERIAL PRIMARY KEY,
+        "type_name" VARCHAR(50) UNIQUE NOT NULL
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="users - User Profiles">
+    Complete user information with identification and contact details.
+
+    ```sql
+    CREATE TABLE "users" (
+        "user_id" SERIAL PRIMARY KEY,
+        "ci" VARCHAR(20) UNIQUE NOT NULL,
+        "first_name" VARCHAR(100) NOT NULL,
+        "last_name" VARCHAR(100) NOT NULL,
+        "email" VARCHAR(100) UNIQUE NOT NULL,
+        "phone" VARCHAR(20),
+        "user_type_id" INTEGER NOT NULL,
+        "code" INTEGER UNIQUE NOT NULL,
+        "status" BOOLEAN DEFAULT true,
+        "registration_date" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="faces - Face Encodings">
+    Stores face recognition encodings for each user.
+
+    ```sql
+    CREATE TABLE "faces" (
+        "face_id" SERIAL PRIMARY KEY,
+        "user_id" INTEGER NOT NULL,
+        "encoding" TEXT NOT NULL,
+        "image_path" TEXT,
+        "upload_date" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="devices - Access Control Devices">
+    Manages physical access control devices and scanners.
+
+    ```sql
+    CREATE TABLE "devices" (
+        "device_id" SERIAL PRIMARY KEY,
+        "name" VARCHAR(100) NOT NULL,
+        "location" VARCHAR(100),
+        "ip_address" VARCHAR(50),
+        "status" BOOLEAN DEFAULT true,
+        "registration_date" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="access_logs - Audit Trail">
+    Complete history of all access attempts with confidence scores.
+
+    ```sql
+    CREATE TABLE "access_logs" (
+        "log_id" SERIAL PRIMARY KEY,
+        "user_id" INTEGER,
+        "device_id" INTEGER NOT NULL,
+        "access_date" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        "confidence" DECIMAL(5,2) NOT NULL,
+        "access_type" VARCHAR(20),
+        "status" VARCHAR(20),
+        "enterCode" BOOLEAN DEFAULT false
+    );
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Verifying Your Installation
+
+Run through this checklist to ensure everything is set up correctly:
+
+<Steps>
+  <Step title="Check Database Connection">
+    ```bash
+    npx prisma db pull
+    ```
+
+    This should connect to your database successfully.
+  </Step>
+
+  <Step title="Verify Tables">
+    ```bash
+    npx prisma studio
+    ```
+
+    You should see all 5 tables: `user_types`, `users`, `faces`, `devices`, and `access_logs`.
+  </Step>
+
+  <Step title="Test Prisma Client">
+    Create a test file:
+
+    ```typescript test.ts
+    import { PrismaClient } from './generated/prisma';
+
+    const prisma = new PrismaClient();
+
+    async function test() {
+      const count = await prisma.user.count();
+      console.log('User count:', count);
+    }
+
+    test().finally(() => prisma.$disconnect());
+    ```
+
+    Run it:
+
+    ```bash
+    npx tsx test.ts
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Database Connection Issues
+
+<AccordionGroup>
+  <Accordion title="Error: Can't reach database server">
+    **Cause:** PostgreSQL is not running or not accessible.
+
+    **Solution:**
+    ```bash
+    # Check Docker container status
+    docker-compose ps
+
+    # Restart the database
+    docker-compose restart postgres
+
+    # Check logs for errors
+    docker-compose logs postgres
+    ```
+  </Accordion>
+
+  <Accordion title="Error: Authentication failed">
+    **Cause:** Incorrect database credentials in `.env`.
+
+    **Solution:**
+    - Verify your `DATABASE_URL` matches the Docker Compose configuration
+    - Ensure no extra spaces in the connection string
+    - Check that the password is correct
+  </Accordion>
+
+  <Accordion title="Error: Port 5432 already in use">
+    **Cause:** Another PostgreSQL instance is running on port 5432.
+
+    **Solution:**
+    - Stop the other PostgreSQL instance, or
+    - Change the port in `docker-compose.yml` and `DATABASE_URL`
+
+    ```yaml
+    ports:
+      - "5433:5432"  # Use 5433 instead
+    ```
+
+    ```bash
+    DATABASE_URL="postgresql://postgres:prisma@localhost:5433/postgres?schema=public"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Prisma Client Issues
+
+<AccordionGroup>
+  <Accordion title="Error: Cannot find module './generated/prisma'">
+    **Cause:** Prisma Client hasn't been generated.
+
+    **Solution:**
+    ```bash
+    npx prisma generate
+    ```
+  </Accordion>
+
+  <Accordion title="Type errors in TypeScript">
+    **Cause:** Prisma Client is out of sync with schema.
+
+    **Solution:**
+    ```bash
+    # Regenerate Prisma Client
+    npx prisma generate
+
+    # Restart TypeScript server in your IDE
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Tutorial" icon="rocket" href="/quickstart">
+    Build your first queries in 5 minutes
+  </Card>
+  <Card title="Database Schema" icon="diagram-project" href="/database/schema">
+    Explore the complete schema and relationships
+  </Card>
+  <Card title="Prisma Client Guide" icon="book" href="/guides/prisma-client">
+    Learn how to use Prisma Client
+  </Card>
+  <Card title="Database Migrations" icon="code-branch" href="/database/migrations">
+    Learn how to modify your schema
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [Prisma Documentation](https://www.prisma.io/docs)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
+- [Docker Documentation](https://docs.docker.com/)
+
+<Tip>
+Join our community for support and updates on [GitHub](https://github.com/ErnestoJuarez2708/BD_Scan_Face).
+</Tip>

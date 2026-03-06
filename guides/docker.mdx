@@ -1,0 +1,543 @@
+---
+title: 'Docker Configuration'
+description: 'Complete guide to using Docker Compose for BD Scan Face database setup'
+icon: 'docker'
+---
+
+BD Scan Face uses Docker Compose to simplify database setup and management. This guide covers the complete Docker configuration and common operations.
+
+## Docker Compose Configuration
+
+The project includes a `docker-compose.yml` file that defines a PostgreSQL database service with optimized settings for development.
+
+### Complete Configuration
+
+```yaml docker-compose.yml
+version: '3.7'
+services: 
+  postgres: 
+    image: postgres:15
+    restart: always
+    environment: 
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=prisma
+    ports: 
+      - "5432:5432"
+    networks: 
+      - prisma-network 
+    healthcheck: 
+      test: ["CMD-SHELL", "pg_isready -U prisma -d postgres"] 
+      interval: 5s
+      timeout: 2s
+      retries: 20
+    volumes: 
+      - postgres_data:/var/lib/postgresql/data
+    command: postgres -c listen_addresses='*'
+    logging: 
+      options: 
+        max-size: "10m"
+        max-file: "3"
+networks: 
+  prisma-network: 
+volumes: 
+  postgres_data:
+```
+
+## Configuration Breakdown
+
+### Service Configuration
+
+#### Base Image
+
+```yaml
+image: postgres:15
+```
+
+Uses PostgreSQL version 15, providing the latest stable features and performance improvements.
+
+#### Restart Policy
+
+```yaml
+restart: always
+```
+
+<Note>
+  The container automatically restarts if it crashes or if Docker restarts, ensuring high availability during development.
+</Note>
+
+#### Environment Variables
+
+```yaml
+environment: 
+  - POSTGRES_DB=postgres
+  - POSTGRES_USER=postgres
+  - POSTGRES_PASSWORD=prisma
+```
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `POSTGRES_DB` | `postgres` | Default database name |
+| `POSTGRES_USER` | `postgres` | PostgreSQL superuser |
+| `POSTGRES_PASSWORD` | `prisma` | Password for authentication |
+
+<Warning>
+  **Security Notice**: Change the default password in production environments. Never commit production credentials to version control.
+</Warning>
+
+#### Port Mapping
+
+```yaml
+ports: 
+  - "5432:5432"
+```
+
+Maps PostgreSQL's default port (5432) from the container to your host machine, allowing direct database access.
+
+<Tip>
+  If port 5432 is already in use, change the host port: `"5433:5432"`
+</Tip>
+
+### Health Checks
+
+```yaml
+healthcheck: 
+  test: ["CMD-SHELL", "pg_isready -U prisma -d postgres"] 
+  interval: 5s
+  timeout: 2s
+  retries: 20
+```
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `test` | `pg_isready` command | Checks if PostgreSQL is ready to accept connections |
+| `interval` | 5 seconds | Time between health checks |
+| `timeout` | 2 seconds | Maximum time for check to complete |
+| `retries` | 20 | Number of consecutive failures before marking unhealthy |
+
+<Note>
+  Health checks ensure the database is fully initialized before your application connects.
+</Note>
+
+### Volume Management
+
+```yaml
+volumes: 
+  - postgres_data:/var/lib/postgresql/data
+```
+
+Persists database data in a named Docker volume, ensuring data survives container restarts and removals.
+
+### Network Configuration
+
+```yaml
+networks: 
+  - prisma-network
+```
+
+Creates an isolated network for database communication, enabling secure inter-container connections.
+
+### PostgreSQL Command
+
+```yaml
+command: postgres -c listen_addresses='*'
+```
+
+Configures PostgreSQL to accept connections from all network interfaces, necessary for Docker networking.
+
+### Logging Configuration
+
+```yaml
+logging: 
+  options: 
+    max-size: "10m"
+    max-file: "3"
+```
+
+- Limits each log file to 10MB
+- Keeps a maximum of 3 log files
+- Prevents disk space issues from excessive logging
+
+## Managing Containers
+
+### Starting the Database
+
+<Steps>
+  <Step title="Start in Detached Mode">
+    ```bash
+    docker-compose up -d
+    ```
+    
+    Starts the PostgreSQL container in the background.
+  </Step>
+
+  <Step title="Verify Container Status">
+    ```bash
+    docker-compose ps
+    ```
+    
+    Expected output:
+    ```
+    NAME                    IMAGE         STATUS         PORTS
+    bd_scan_face_postgres_1 postgres:15   Up (healthy)   0.0.0.0:5432->5432/tcp
+    ```
+  </Step>
+
+  <Step title="Wait for Health Check">
+    ```bash
+    docker-compose ps
+    ```
+    
+    Wait until the status shows `Up (healthy)` before connecting.
+  </Step>
+</Steps>
+
+<Tip>
+  To view startup logs in real-time, omit the `-d` flag: `docker-compose up`
+</Tip>
+
+### Stopping the Database
+
+<CodeGroup>
+
+```bash Stop Container
+docker-compose stop
+```
+
+```bash Stop and Remove Container
+docker-compose down
+```
+
+```bash Stop and Remove Everything (Including Volumes)
+docker-compose down -v
+```
+
+</CodeGroup>
+
+<Warning>
+  Using `docker-compose down -v` deletes all database data. Use this only when you want to completely reset.
+</Warning>
+
+### Restarting the Database
+
+```bash
+docker-compose restart postgres
+```
+
+## Accessing the Database
+
+### Using psql (Interactive Terminal)
+
+```bash
+docker exec -it bd_scan_face_postgres_1 psql -U postgres -d postgres
+```
+
+<Note>
+  Replace `bd_scan_face_postgres_1` with your actual container name from `docker-compose ps`.
+</Note>
+
+### Common psql Commands
+
+| Command | Description |
+|---------|-------------|
+| `\l` | List all databases |
+| `\dt` | List all tables |
+| `\d table_name` | Describe table structure |
+| `\du` | List users |
+| `\q` | Quit psql |
+
+### Execute Single Query
+
+```bash
+docker exec -it bd_scan_face_postgres_1 psql -U postgres -d postgres -c "SELECT * FROM users LIMIT 5;"
+```
+
+### Using pg_dump (Database Backup)
+
+```bash
+docker exec bd_scan_face_postgres_1 pg_dump -U postgres postgres > backup.sql
+```
+
+### Restore from Backup
+
+```bash
+docker exec -i bd_scan_face_postgres_1 psql -U postgres -d postgres < backup.sql
+```
+
+## Viewing Logs
+
+### Real-time Logs
+
+```bash
+docker-compose logs -f postgres
+```
+
+Press `Ctrl+C` to stop following logs.
+
+### Last N Lines
+
+```bash
+docker-compose logs --tail=100 postgres
+```
+
+### Logs with Timestamps
+
+```bash
+docker-compose logs -t postgres
+```
+
+## Volume Management
+
+### List Volumes
+
+```bash
+docker volume ls
+```
+
+Look for the volume named `bd_scan_face_postgres_data` or similar.
+
+### Inspect Volume
+
+```bash
+docker volume inspect bd_scan_face_postgres_data
+```
+
+Shows mount point and other volume details.
+
+### Backup Volume Data
+
+```bash
+docker run --rm \
+  -v bd_scan_face_postgres_data:/data \
+  -v $(pwd):/backup \
+  ubuntu tar czf /backup/postgres_backup.tar.gz /data
+```
+
+### Restore Volume Data
+
+```bash
+docker run --rm \
+  -v bd_scan_face_postgres_data:/data \
+  -v $(pwd):/backup \
+  ubuntu tar xzf /backup/postgres_backup.tar.gz -C /
+```
+
+### Remove Volume (Delete All Data)
+
+<Warning>
+  This permanently deletes all database data. Cannot be undone!
+</Warning>
+
+```bash
+# Stop containers first
+docker-compose down
+
+# Remove volume
+docker volume rm bd_scan_face_postgres_data
+```
+
+## Network Management
+
+### Inspect Network
+
+```bash
+docker network inspect bd_scan_face_prisma-network
+```
+
+Shows connected containers and network configuration.
+
+### Connect Application Container
+
+If running your application in Docker:
+
+```yaml docker-compose.yml
+services:
+  app:
+    # ... your app configuration
+    networks:
+      - prisma-network
+    environment:
+      DATABASE_URL: "postgresql://postgres:prisma@postgres:5432/postgres?schema=public"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    # ... existing postgres configuration
+```
+
+<Note>
+  When connecting from within Docker network, use the service name (`postgres`) as the hostname instead of `localhost`.
+</Note>
+
+## Environment Customization
+
+### Custom Database Name
+
+```yaml docker-compose.yml
+environment:
+  - POSTGRES_DB=bd_scan_face
+  - POSTGRES_USER=postgres
+  - POSTGRES_PASSWORD=prisma
+```
+
+Update your `DATABASE_URL`:
+
+```bash .env
+DATABASE_URL="postgresql://postgres:prisma@localhost:5432/bd_scan_face?schema=public"
+```
+
+### Custom Port
+
+```yaml docker-compose.yml
+ports:
+  - "5433:5432"
+```
+
+Update your `DATABASE_URL`:
+
+```bash .env
+DATABASE_URL="postgresql://postgres:prisma@localhost:5433/postgres?schema=public"
+```
+
+### Multiple Databases
+
+```yaml docker-compose.yml
+services:
+  postgres_dev:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=bd_scan_face_dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+
+  postgres_test:
+    image: postgres:15
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=bd_scan_face_test
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_dev_data:
+  postgres_test_data:
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
+# View detailed logs
+docker-compose logs postgres
+
+# Check if port is in use
+lsof -i :5432
+
+# Remove and recreate container
+docker-compose down
+docker-compose up -d
+```
+
+### Health Check Failing
+
+<Warning>
+  **Error**: Container shows as unhealthy
+</Warning>
+
+```bash
+# Check health status
+docker inspect bd_scan_face_postgres_1 | grep Health -A 10
+
+# View logs for errors
+docker-compose logs postgres
+
+# Verify health check command
+docker exec bd_scan_face_postgres_1 pg_isready -U postgres -d postgres
+```
+
+### Connection Refused
+
+<CodeGroup>
+
+```bash Check if Container is Running
+docker-compose ps
+```
+
+```bash Test Connection from Host
+psql -h localhost -U postgres -d postgres
+```
+
+```bash Check Port Binding
+docker port bd_scan_face_postgres_1
+```
+
+</CodeGroup>
+
+### Disk Space Issues
+
+```bash
+# Check Docker disk usage
+docker system df
+
+# Clean up unused resources
+docker system prune
+
+# Remove old images
+docker image prune -a
+```
+
+### Permission Denied on Volume
+
+```bash
+# Fix volume permissions
+docker-compose down
+sudo chown -R $USER:$USER /var/lib/docker/volumes/bd_scan_face_postgres_data
+docker-compose up -d
+```
+
+## Performance Tuning
+
+### Increase Shared Buffers
+
+```yaml docker-compose.yml
+command: postgres -c listen_addresses='*' -c shared_buffers=256MB -c max_connections=200
+```
+
+### Add Performance Configuration
+
+```yaml docker-compose.yml
+environment:
+  - POSTGRES_INITDB_ARGS=-E UTF8 --lc-collate=C --lc-ctype=C
+  - POSTGRES_HOST_AUTH_METHOD=md5
+command: |
+  postgres
+    -c listen_addresses='*'
+    -c shared_buffers=256MB
+    -c effective_cache_size=1GB
+    -c maintenance_work_mem=64MB
+    -c checkpoint_completion_target=0.9
+    -c wal_buffers=16MB
+    -c default_statistics_target=100
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Setup" icon="wrench" href="/guides/setup">
+    Complete setup guide for the application
+  </Card>
+  <Card title="Prisma Client" icon="database" href="/guides/prisma-client">
+    Learn how to use Prisma Client
+  </Card>
+  <Card title="Database Schema" icon="table" href="/database/schema">
+    Explore the database schema
+  </Card>
+  <Card title="Troubleshooting" icon="triangle-exclamation" href="/guides/setup#troubleshooting">
+    Common issues and solutions
+  </Card>
+</CardGroup>

@@ -1,0 +1,383 @@
+---
+title: 'UserType'
+description: 'UserType model defining roles and permissions for users'
+---
+
+## Overview
+
+The UserType model defines the different roles and classifications of users in the BD Scan Face system. User types determine access levels, permissions, and organizational hierarchy (e.g., Employee, Visitor, Administrator, Contractor).
+
+## Model Fields
+
+<ParamField path="user_type_id" type="Int" required>
+  Primary key. Auto-incremented unique identifier for the user type.
+</ParamField>
+
+<ParamField path="type_name" type="String" required>
+  Name of the user type. Must be unique across all user types. Maximum 50 characters. Examples: "Employee", "Visitor", "Administrator", "Contractor", "Security".
+</ParamField>
+
+## Relationships
+
+<ParamField path="users" type="User[]">
+  Array of User records assigned to this user type. Represents all users with this role.
+</ParamField>
+
+## Query Examples
+
+### Find All User Types
+
+```typescript
+const userTypes = await prisma.userType.findMany({
+  include: {
+    _count: {
+      select: { users: true }
+    }
+  },
+  orderBy: {
+    type_name: 'asc'
+  }
+});
+```
+
+### Find User Type by ID
+
+```typescript
+const userType = await prisma.userType.findUnique({
+  where: {
+    user_type_id: 1
+  },
+  include: {
+    users: {
+      select: {
+        user_id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        status: true
+      },
+      orderBy: {
+        last_name: 'asc'
+      }
+    }
+  }
+});
+```
+
+### Find User Type by Name
+
+```typescript
+const employeeType = await prisma.userType.findUnique({
+  where: {
+    type_name: 'Employee'
+  },
+  include: {
+    _count: {
+      select: { users: true }
+    }
+  }
+});
+```
+
+### Create New User Type
+
+```typescript
+const newUserType = await prisma.userType.create({
+  data: {
+    type_name: 'Contractor'
+  }
+});
+```
+
+### Create User Type with Users
+
+```typescript
+const userTypeWithUsers = await prisma.userType.create({
+  data: {
+    type_name: 'Visitor',
+    users: {
+      create: [
+        {
+          ci: '11111111',
+          first_name: 'John',
+          last_name: 'Smith',
+          email: 'john.smith@example.com',
+          code: 2001,
+          status: true
+        },
+        {
+          ci: '22222222',
+          first_name: 'Jane',
+          last_name: 'Doe',
+          email: 'jane.doe@example.com',
+          code: 2002,
+          status: true
+        }
+      ]
+    }
+  },
+  include: {
+    users: true
+  }
+});
+```
+
+### Update User Type
+
+```typescript
+const updatedUserType = await prisma.userType.update({
+  where: {
+    user_type_id: 1
+  },
+  data: {
+    type_name: 'Full-Time Employee'
+  },
+  include: {
+    _count: {
+      select: { users: true }
+    }
+  }
+});
+```
+
+### Delete User Type
+
+```typescript
+// Note: Will fail if users are still assigned to this type
+// Remove users first or use cascading delete if configured
+const deletedUserType = await prisma.userType.delete({
+  where: {
+    user_type_id: 1
+  }
+});
+```
+
+### Get User Types with User Counts
+
+```typescript
+const userTypesWithCounts = await prisma.userType.findMany({
+  include: {
+    _count: {
+      select: { users: true }
+    }
+  },
+  orderBy: {
+    type_name: 'asc'
+  }
+});
+
+// Access the counts
+userTypesWithCounts.forEach(type => {
+  console.log(`${type.type_name}: ${type._count.users} users`);
+});
+```
+
+### Find User Types with Active Users
+
+```typescript
+const activeUserTypes = await prisma.userType.findMany({
+  where: {
+    users: {
+      some: {
+        status: true
+      }
+    }
+  },
+  include: {
+    users: {
+      where: {
+        status: true
+      },
+      select: {
+        user_id: true,
+        first_name: true,
+        last_name: true,
+        email: true
+      }
+    },
+    _count: {
+      select: { users: true }
+    }
+  }
+});
+```
+
+### Get All Users of a Specific Type
+
+```typescript
+const employees = await prisma.user.findMany({
+  where: {
+    user_type: {
+      type_name: 'Employee'
+    }
+  },
+  include: {
+    user_type: true,
+    faces: true,
+    _count: {
+      select: { access_logs: true }
+    }
+  },
+  orderBy: {
+    last_name: 'asc'
+  }
+});
+```
+
+### Find User Types with No Users
+
+```typescript
+const emptyUserTypes = await prisma.userType.findMany({
+  where: {
+    users: {
+      none: {}
+    }
+  },
+  orderBy: {
+    type_name: 'asc'
+  }
+});
+```
+
+### Get User Type Statistics
+
+```typescript
+const userTypeStats = await prisma.userType.findMany({
+  include: {
+    users: {
+      include: {
+        _count: {
+          select: {
+            faces: true,
+            access_logs: true
+          }
+        }
+      }
+    },
+    _count: {
+      select: { users: true }
+    }
+  }
+});
+```
+
+### Find User Types with Recent Access Activity
+
+```typescript
+const activeUserTypes = await prisma.userType.findMany({
+  where: {
+    users: {
+      some: {
+        access_logs: {
+          some: {
+            access_date: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
+            }
+          }
+        }
+      }
+    }
+  },
+  include: {
+    _count: {
+      select: { users: true }
+    }
+  }
+});
+```
+
+### Reassign Users to Different Type
+
+```typescript
+// Move all contractors to employee type
+const updatedUsers = await prisma.user.updateMany({
+  where: {
+    user_type: {
+      type_name: 'Contractor'
+    }
+  },
+  data: {
+    user_type_id: 1 // Employee type ID
+  }
+});
+```
+
+### Create Multiple User Types
+
+```typescript
+const userTypes = await Promise.all([
+  prisma.userType.create({ data: { type_name: 'Employee' } }),
+  prisma.userType.create({ data: { type_name: 'Visitor' } }),
+  prisma.userType.create({ data: { type_name: 'Contractor' } }),
+  prisma.userType.create({ data: { type_name: 'Administrator' } }),
+  prisma.userType.create({ data: { type_name: 'Security' } })
+]);
+```
+
+## Common User Types
+
+### Employee
+
+Permanent staff members with regular access privileges.
+- Full system access during work hours
+- Multiple face encodings for accuracy
+- Long-term access credentials
+
+### Visitor
+
+Temporary guests with limited access.
+- Time-limited access credentials
+- May require escort or supervision
+- Access to specific zones only
+
+### Administrator
+
+System administrators with elevated privileges.
+- Full system access and configuration rights
+- User management capabilities
+- Access to all devices and locations
+
+### Contractor
+
+Temporary workers with project-based access.
+- Access limited to project duration
+- Specific area restrictions
+- May require additional verification
+
+### Security
+
+Security personnel with monitoring access.
+- Access to security systems and logs
+- Override capabilities for emergencies
+- 24/7 access to monitored areas
+
+## Use Cases
+
+### Role-Based Access Control
+
+User types enable:
+- Different permission levels per role
+- Access policy enforcement
+- Organizational hierarchy representation
+
+### Reporting and Analytics
+
+Segment data by user type:
+- Access patterns by role
+- Usage statistics per department
+- Security compliance by user category
+
+### Workflow Management
+
+Different processes per type:
+- Visitor check-in/check-out procedures
+- Employee onboarding automation
+- Contractor access expiration
+
+## Unique Constraints
+
+- `type_name`: Must be unique across all user types
+
+## Database Mapping
+
+This model maps to the `user_types` table in the database.

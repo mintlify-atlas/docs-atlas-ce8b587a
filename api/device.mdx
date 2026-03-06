@@ -1,0 +1,315 @@
+---
+title: 'Device'
+description: 'Device model representing facial recognition hardware units'
+---
+
+## Overview
+
+The Device model represents physical or virtual facial recognition devices deployed in the BD Scan Face system. Devices are entry points where users attempt access, and they log all access attempts with associated confidence scores.
+
+## Model Fields
+
+<ParamField path="device_id" type="Int" required>
+  Primary key. Auto-incremented unique identifier for the device.
+</ParamField>
+
+<ParamField path="name" type="String" required>
+  Descriptive name for the device. Maximum 100 characters. Example: "Main Entrance Scanner", "Office Door 2A".
+</ParamField>
+
+<ParamField path="location" type="String | null">
+  Physical location of the device. Maximum 100 characters. Example: "Building A - First Floor", "Parking Garage Exit".
+</ParamField>
+
+<ParamField path="ip_address" type="String | null">
+  Network IP address of the device. Maximum 50 characters. Used for device communication and management.
+</ParamField>
+
+<ParamField path="status" type="Boolean" default="true">
+  Indicates whether the device is active and operational. Defaults to true.
+</ParamField>
+
+<ParamField path="registration_date" type="DateTime" default="now()">
+  Timestamp when the device was registered in the system. Automatically set to current time.
+</ParamField>
+
+## Relationships
+
+<ParamField path="access_logs" type="AccessLog[]">
+  Array of AccessLog records tracking all access attempts made at this device.
+</ParamField>
+
+## Query Examples
+
+### Find All Devices
+
+```typescript
+const devices = await prisma.device.findMany({
+  include: {
+    _count: {
+      select: { access_logs: true }
+    }
+  },
+  orderBy: {
+    name: 'asc'
+  }
+});
+```
+
+### Find Device by ID
+
+```typescript
+const device = await prisma.device.findUnique({
+  where: {
+    device_id: 1
+  },
+  include: {
+    access_logs: {
+      take: 20,
+      orderBy: {
+        access_date: 'desc'
+      },
+      include: {
+        user: {
+          select: {
+            first_name: true,
+            last_name: true,
+            ci: true
+          }
+        }
+      }
+    }
+  }
+});
+```
+
+### Create New Device
+
+```typescript
+const newDevice = await prisma.device.create({
+  data: {
+    name: 'Main Entrance Scanner',
+    location: 'Building A - Main Lobby',
+    ip_address: '192.168.1.100',
+    status: true
+  }
+});
+```
+
+### Update Device
+
+```typescript
+const updatedDevice = await prisma.device.update({
+  where: {
+    device_id: 1
+  },
+  data: {
+    location: 'Building B - Reception',
+    ip_address: '192.168.1.101',
+    status: false
+  }
+});
+```
+
+### Delete Device
+
+```typescript
+// Note: Consider cascading deletes for related access_logs
+const deletedDevice = await prisma.device.delete({
+  where: {
+    device_id: 1
+  }
+});
+```
+
+### Find Active Devices
+
+```typescript
+const activeDevices = await prisma.device.findMany({
+  where: {
+    status: true
+  },
+  include: {
+    _count: {
+      select: { access_logs: true }
+    }
+  },
+  orderBy: {
+    name: 'asc'
+  }
+});
+```
+
+### Find Devices by Location
+
+```typescript
+const buildingDevices = await prisma.device.findMany({
+  where: {
+    location: {
+      contains: 'Building A',
+      mode: 'insensitive'
+    }
+  },
+  include: {
+    _count: {
+      select: { access_logs: true }
+    }
+  }
+});
+```
+
+### Find Device by IP Address
+
+```typescript
+const deviceByIp = await prisma.device.findFirst({
+  where: {
+    ip_address: '192.168.1.100'
+  },
+  include: {
+    access_logs: {
+      take: 10,
+      orderBy: {
+        access_date: 'desc'
+      }
+    }
+  }
+});
+```
+
+### Get Device with Recent Access Logs
+
+```typescript
+const deviceWithRecentAccess = await prisma.device.findUnique({
+  where: {
+    device_id: 1
+  },
+  include: {
+    access_logs: {
+      where: {
+        access_date: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
+        }
+      },
+      orderBy: {
+        access_date: 'desc'
+      },
+      include: {
+        user: {
+          select: {
+            first_name: true,
+            last_name: true,
+            ci: true
+          }
+        }
+      }
+    }
+  }
+});
+```
+
+### Get Devices with Access Statistics
+
+```typescript
+const devicesWithStats = await prisma.device.findMany({
+  where: {
+    status: true
+  },
+  include: {
+    access_logs: {
+      where: {
+        access_date: {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
+        }
+      },
+      select: {
+        log_id: true,
+        access_date: true,
+        confidence: true,
+        status: true
+      }
+    },
+    _count: {
+      select: { access_logs: true }
+    }
+  }
+});
+```
+
+### Find Most Active Devices
+
+```typescript
+const devices = await prisma.device.findMany({
+  include: {
+    _count: {
+      select: { access_logs: true }
+    }
+  }
+});
+
+// Sort by access log count in application code
+const mostActiveDevices = devices.sort(
+  (a, b) => b._count.access_logs - a._count.access_logs
+).slice(0, 10);
+```
+
+### Update Device Status
+
+```typescript
+const disabledDevice = await prisma.device.update({
+  where: {
+    device_id: 1
+  },
+  data: {
+    status: false
+  }
+});
+```
+
+### Find Recently Registered Devices
+
+```typescript
+const recentDevices = await prisma.device.findMany({
+  where: {
+    registration_date: {
+      gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+    }
+  },
+  orderBy: {
+    registration_date: 'desc'
+  }
+});
+```
+
+## Device Management Use Cases
+
+### Status Monitoring
+
+The `status` field enables:
+- Temporarily disabling devices for maintenance
+- Managing device lifecycle
+- Filtering active devices for reporting
+
+### Network Configuration
+
+The `ip_address` field supports:
+- Device discovery and connection
+- Network diagnostics
+- Remote device management
+
+### Location Tracking
+
+The `location` field provides:
+- Physical device mapping
+- Access pattern analysis by location
+- Security zone management
+
+### Access Analytics
+
+Through the `access_logs` relationship:
+- Track usage patterns per device
+- Identify high-traffic entry points
+- Monitor device performance and reliability
+
+## Database Mapping
+
+This model maps to the `devices` table in the database.

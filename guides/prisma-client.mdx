@@ -1,0 +1,610 @@
+---
+title: 'Using Prisma Client'
+description: 'Complete guide to using Prisma Client for database operations in BD Scan Face'
+icon: 'database'
+---
+
+Prisma Client is a type-safe database client auto-generated from your Prisma schema. This guide covers how to use it with the BD Scan Face database.
+
+## Generating the Client
+
+The Prisma Client is configured to be generated in a custom location:
+
+```prisma schema.prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+```
+
+### Generate Command
+
+Run this command whenever you update the schema:
+
+```bash
+npx prisma generate
+```
+
+<Note>
+  The generated client will be located in `generated/prisma` relative to your schema file.
+</Note>
+
+## Initializing the Client
+
+Create a Prisma Client instance in your application:
+
+<CodeGroup>
+
+```typescript TypeScript
+import { PrismaClient } from '../generated/prisma';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+
+const connectionString = process.env.DATABASE_URL;
+
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
+
+export default prisma;
+```
+
+```javascript JavaScript
+const { PrismaClient } = require('../generated/prisma');
+const { Pool } = require('pg');
+const { PrismaPg } = require('@prisma/adapter-pg');
+
+const connectionString = process.env.DATABASE_URL;
+
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
+
+module.exports = prisma;
+```
+
+</CodeGroup>
+
+<Tip>
+  Using the PostgreSQL adapter provides better connection pooling and performance for PostgreSQL databases.
+</Tip>
+
+## CRUD Operations
+
+### User Operations
+
+#### Create a User
+
+```typescript
+const newUser = await prisma.user.create({
+  data: {
+    ci: "1234567",
+    first_name: "Juan",
+    last_name: "Perez",
+    email: "juan.perez@example.com",
+    phone: "+1234567890",
+    user_type_id: 1,
+    code: 1001,
+    status: true
+  }
+});
+
+console.log("Created user:", newUser);
+```
+
+<Note>
+  The `registration_date` field is automatically set to the current timestamp via `@default(now())`.
+</Note>
+
+#### Find Users
+
+<CodeGroup>
+
+```typescript Find All Users
+const users = await prisma.user.findMany();
+```
+
+```typescript Find by Email
+const user = await prisma.user.findUnique({
+  where: { email: "juan.perez@example.com" }
+});
+```
+
+```typescript Find by CI
+const user = await prisma.user.findUnique({
+  where: { ci: "1234567" }
+});
+```
+
+```typescript Find by Code
+const user = await prisma.user.findUnique({
+  where: { code: 1001 }
+});
+```
+
+```typescript Filter Active Users
+const activeUsers = await prisma.user.findMany({
+  where: { status: true }
+});
+```
+
+```typescript Search by Name
+const users = await prisma.user.findMany({
+  where: {
+    OR: [
+      { first_name: { contains: "Juan", mode: 'insensitive' } },
+      { last_name: { contains: "Juan", mode: 'insensitive' } }
+    ]
+  }
+});
+```
+
+</CodeGroup>
+
+#### Update a User
+
+```typescript
+const updatedUser = await prisma.user.update({
+  where: { user_id: 1 },
+  data: {
+    phone: "+9876543210",
+    email: "newemail@example.com"
+  }
+});
+```
+
+#### Delete a User
+
+<Warning>
+  Deleting a user will fail if they have related faces or access logs due to foreign key constraints.
+</Warning>
+
+```typescript
+// Soft delete (recommended)
+const deactivatedUser = await prisma.user.update({
+  where: { user_id: 1 },
+  data: { status: false }
+});
+
+// Hard delete (use with caution)
+const deletedUser = await prisma.user.delete({
+  where: { user_id: 1 }
+});
+```
+
+### UserType Operations
+
+#### Create User Types
+
+```typescript
+const userTypes = await prisma.userType.createMany({
+  data: [
+    { type_name: "Employee" },
+    { type_name: "Visitor" },
+    { type_name: "Contractor" },
+    { type_name: "Administrator" }
+  ]
+});
+```
+
+#### Find User Types
+
+```typescript
+const allTypes = await prisma.userType.findMany();
+
+const employeeType = await prisma.userType.findUnique({
+  where: { type_name: "Employee" }
+});
+```
+
+### Face Operations
+
+#### Store Face Encoding
+
+```typescript
+const face = await prisma.face.create({
+  data: {
+    user_id: 1,
+    encoding: JSON.stringify([0.123, 0.456, 0.789, /* ...128 values */]),
+    image_path: "/uploads/faces/user_1_face_1.jpg"
+  }
+});
+```
+
+<Tip>
+  Face encodings are typically 128-dimensional vectors. Store them as JSON strings or binary format depending on your needs.
+</Tip>
+
+#### Get User's Faces
+
+```typescript
+const userFaces = await prisma.face.findMany({
+  where: { user_id: 1 },
+  orderBy: { upload_date: 'desc' }
+});
+```
+
+#### Delete a Face
+
+```typescript
+const deletedFace = await prisma.face.delete({
+  where: { face_id: 5 }
+});
+```
+
+### Device Operations
+
+#### Register a Device
+
+```typescript
+const device = await prisma.device.create({
+  data: {
+    name: "Main Entrance Scanner",
+    location: "Building A - Main Entrance",
+    ip_address: "192.168.1.100",
+    status: true
+  }
+});
+```
+
+#### Update Device Status
+
+```typescript
+const device = await prisma.device.update({
+  where: { device_id: 1 },
+  data: { status: false }
+});
+```
+
+#### Find Active Devices
+
+```typescript
+const activeDevices = await prisma.device.findMany({
+  where: { status: true },
+  orderBy: { name: 'asc' }
+});
+```
+
+### Access Log Operations
+
+#### Create Access Log
+
+```typescript
+const accessLog = await prisma.accessLog.create({
+  data: {
+    user_id: 1,
+    device_id: 1,
+    confidence: 98.5,
+    access_type: "entry",
+    status: "granted",
+    enterCode: false
+  }
+});
+```
+
+<Note>
+  - `confidence` is stored as `Decimal(5, 2)`, allowing values like 99.99
+  - `access_date` is automatically set to current timestamp
+  - `user_id` can be null for failed recognition attempts
+</Note>
+
+#### Query Access Logs
+
+<CodeGroup>
+
+```typescript Recent Logs
+const recentLogs = await prisma.accessLog.findMany({
+  take: 50,
+  orderBy: { access_date: 'desc' }
+});
+```
+
+```typescript User's Access History
+const userLogs = await prisma.accessLog.findMany({
+  where: { user_id: 1 },
+  orderBy: { access_date: 'desc' }
+});
+```
+
+```typescript Device Logs
+const deviceLogs = await prisma.accessLog.findMany({
+  where: { device_id: 1 },
+  orderBy: { access_date: 'desc' }
+});
+```
+
+```typescript Failed Access Attempts
+const failedAttempts = await prisma.accessLog.findMany({
+  where: { status: "denied" },
+  orderBy: { access_date: 'desc' }
+});
+```
+
+```typescript Code Entry Logs
+const codeEntries = await prisma.accessLog.findMany({
+  where: { enterCode: true },
+  orderBy: { access_date: 'desc' }
+});
+```
+
+```typescript Date Range Query
+const logsInRange = await prisma.accessLog.findMany({
+  where: {
+    access_date: {
+      gte: new Date('2024-01-01'),
+      lte: new Date('2024-12-31')
+    }
+  }
+});
+```
+
+</CodeGroup>
+
+## Relationship Queries
+
+### Include Related Data
+
+#### User with User Type
+
+```typescript
+const userWithType = await prisma.user.findUnique({
+  where: { user_id: 1 },
+  include: {
+    user_type: true
+  }
+});
+
+console.log(`${userWithType.first_name} is a ${userWithType.user_type.type_name}`);
+```
+
+#### User with All Related Data
+
+```typescript
+const fullUser = await prisma.user.findUnique({
+  where: { user_id: 1 },
+  include: {
+    user_type: true,
+    faces: true,
+    access_logs: {
+      include: {
+        device: true
+      },
+      orderBy: { access_date: 'desc' },
+      take: 10
+    }
+  }
+});
+```
+
+#### Access Log with Full Context
+
+```typescript
+const detailedLog = await prisma.accessLog.findUnique({
+  where: { log_id: 1 },
+  include: {
+    user: {
+      include: {
+        user_type: true
+      }
+    },
+    device: true
+  }
+});
+
+if (detailedLog.user) {
+  console.log(
+    `${detailedLog.user.first_name} ${detailedLog.user.last_name} ` +
+    `accessed ${detailedLog.device.name} at ${detailedLog.access_date}`
+  );
+}
+```
+
+#### Device with Recent Access Logs
+
+```typescript
+const deviceActivity = await prisma.device.findUnique({
+  where: { device_id: 1 },
+  include: {
+    access_logs: {
+      include: {
+        user: true
+      },
+      orderBy: { access_date: 'desc' },
+      take: 20
+    }
+  }
+});
+```
+
+### Select Specific Fields
+
+```typescript
+const userSummary = await prisma.user.findMany({
+  select: {
+    user_id: true,
+    first_name: true,
+    last_name: true,
+    email: true,
+    user_type: {
+      select: {
+        type_name: true
+      }
+    }
+  }
+});
+```
+
+## Advanced Queries
+
+### Aggregations
+
+<CodeGroup>
+
+```typescript Count Users by Type
+const userCountByType = await prisma.user.groupBy({
+  by: ['user_type_id'],
+  _count: {
+    user_id: true
+  }
+});
+```
+
+```typescript Average Confidence by Device
+const avgConfidence = await prisma.accessLog.groupBy({
+  by: ['device_id'],
+  _avg: {
+    confidence: true
+  },
+  where: {
+    status: 'granted'
+  }
+});
+```
+
+```typescript Access Count by User
+const accessCounts = await prisma.accessLog.groupBy({
+  by: ['user_id'],
+  _count: {
+    log_id: true
+  },
+  orderBy: {
+    _count: {
+      log_id: 'desc'
+    }
+  }
+});
+```
+
+</CodeGroup>
+
+### Transactions
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  // Create user
+  const user = await tx.user.create({
+    data: {
+      ci: "7654321",
+      first_name: "Maria",
+      last_name: "Garcia",
+      email: "maria.garcia@example.com",
+      user_type_id: 1,
+      code: 1002
+    }
+  });
+
+  // Create face encoding
+  const face = await tx.face.create({
+    data: {
+      user_id: user.user_id,
+      encoding: JSON.stringify([/* encoding data */]),
+      image_path: `/uploads/faces/user_${user.user_id}_face_1.jpg`
+    }
+  });
+
+  return { user, face };
+});
+
+console.log("User and face created successfully:", result);
+```
+
+<Tip>
+  Transactions ensure that all operations succeed or fail together, maintaining data consistency.
+</Tip>
+
+### Batch Operations
+
+```typescript
+// Create multiple access logs
+const logs = await prisma.accessLog.createMany({
+  data: [
+    { user_id: 1, device_id: 1, confidence: 99.2, access_type: "entry", status: "granted" },
+    { user_id: 2, device_id: 1, confidence: 97.5, access_type: "entry", status: "granted" },
+    { user_id: 3, device_id: 2, confidence: 85.0, access_type: "exit", status: "granted" }
+  ],
+  skipDuplicates: true
+});
+
+console.log(`Created ${logs.count} access logs`);
+```
+
+### Raw Queries
+
+For complex queries not supported by Prisma's query builder:
+
+```typescript
+const result = await prisma.$queryRaw`
+  SELECT 
+    d.name as device_name,
+    COUNT(al.log_id) as access_count,
+    AVG(al.confidence) as avg_confidence
+  FROM devices d
+  LEFT JOIN access_logs al ON d.device_id = al.device_id
+  WHERE al.access_date >= NOW() - INTERVAL '7 days'
+  GROUP BY d.device_id, d.name
+  ORDER BY access_count DESC
+`;
+```
+
+<Warning>
+  Raw queries bypass Prisma's type safety. Use them only when necessary.
+</Warning>
+
+## Best Practices
+
+### Connection Management
+
+```typescript
+// Disconnect when application shuts down
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});
+```
+
+### Error Handling
+
+```typescript
+import { Prisma } from '../generated/prisma';
+
+try {
+  await prisma.user.create({
+    data: { /* ... */ }
+  });
+} catch (error) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    // Handle specific errors
+    if (error.code === 'P2002') {
+      console.error('Unique constraint violation:', error.meta?.target);
+    }
+  }
+  throw error;
+}
+```
+
+### Common Error Codes
+
+| Code | Description |
+|------|-------------|
+| P2002 | Unique constraint violation |
+| P2003 | Foreign key constraint violation |
+| P2025 | Record not found |
+| P2014 | Relation violation |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="table" href="/database/schema">
+    Explore the complete database schema
+  </Card>
+  <Card title="Docker Setup" icon="docker" href="/guides/docker">
+    Learn about the Docker configuration
+  </Card>
+  <Card title="Models Reference" icon="book" href="/database/models">
+    Detailed reference for each model
+  </Card>
+  <Card title="Setup Guide" icon="wrench" href="/guides/setup">
+    Complete environment setup
+  </Card>
+</CardGroup>

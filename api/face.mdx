@@ -1,0 +1,278 @@
+---
+title: 'Face'
+description: 'Face model storing biometric encoding data for facial recognition'
+---
+
+## Overview
+
+The Face model stores biometric facial encoding data for users in the BD Scan Face system. Each face record contains the encoded facial features that enable facial recognition matching during access attempts.
+
+## Model Fields
+
+<ParamField path="face_id" type="Int" required>
+  Primary key. Auto-incremented unique identifier for the face record.
+</ParamField>
+
+<ParamField path="user_id" type="Int" required>
+  Foreign key reference to the User model. Links this face encoding to a specific user.
+</ParamField>
+
+<ParamField path="encoding" type="String" required>
+  The facial encoding data as a string. This contains the biometric features extracted from the face image, typically stored as a serialized array or vector.
+</ParamField>
+
+<ParamField path="image_path" type="String | null">
+  Optional file path to the original face image. Can be used for audit purposes or re-encoding if needed.
+</ParamField>
+
+<ParamField path="upload_date" type="DateTime" default="now()">
+  Timestamp when the face encoding was created. Automatically set to current time.
+</ParamField>
+
+## Relationships
+
+<ParamField path="user" type="User">
+  The User associated with this face encoding. Each face belongs to exactly one user.
+</ParamField>
+
+## Query Examples
+
+### Find All Faces for a User
+
+```typescript
+const userFaces = await prisma.face.findMany({
+  where: {
+    user_id: 1
+  },
+  include: {
+    user: {
+      select: {
+        user_id: true,
+        first_name: true,
+        last_name: true,
+        ci: true,
+        status: true
+      }
+    }
+  },
+  orderBy: {
+    upload_date: 'desc'
+  }
+});
+```
+
+### Find Face by ID
+
+```typescript
+const face = await prisma.face.findUnique({
+  where: {
+    face_id: 1
+  },
+  include: {
+    user: {
+      include: {
+        user_type: true
+      }
+    }
+  }
+});
+```
+
+### Create New Face Encoding
+
+```typescript
+const newFace = await prisma.face.create({
+  data: {
+    user_id: 1,
+    encoding: '[0.123, -0.456, 0.789, ...]', // Serialized face encoding vector
+    image_path: '/uploads/faces/user_1_face_2024.jpg'
+  },
+  include: {
+    user: true
+  }
+});
+```
+
+### Create Face with User Connection
+
+```typescript
+const faceWithUser = await prisma.face.create({
+  data: {
+    encoding: '[0.234, -0.567, 0.891, ...]',
+    image_path: '/uploads/faces/new_user_face.jpg',
+    user: {
+      connect: {
+        user_id: 5
+      }
+    }
+  },
+  include: {
+    user: {
+      select: {
+        first_name: true,
+        last_name: true,
+        email: true
+      }
+    }
+  }
+});
+```
+
+### Update Face Encoding
+
+```typescript
+const updatedFace = await prisma.face.update({
+  where: {
+    face_id: 1
+  },
+  data: {
+    encoding: '[0.345, -0.678, 0.912, ...]', // Updated encoding
+    image_path: '/uploads/faces/updated_face.jpg'
+  },
+  include: {
+    user: true
+  }
+});
+```
+
+### Delete Face
+
+```typescript
+const deletedFace = await prisma.face.delete({
+  where: {
+    face_id: 1
+  }
+});
+```
+
+### Find All Faces with User Details
+
+```typescript
+const allFaces = await prisma.face.findMany({
+  include: {
+    user: {
+      include: {
+        user_type: true
+      }
+    }
+  },
+  orderBy: {
+    upload_date: 'desc'
+  }
+});
+```
+
+### Find Recently Uploaded Faces
+
+```typescript
+const recentFaces = await prisma.face.findMany({
+  where: {
+    upload_date: {
+      gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+    }
+  },
+  include: {
+    user: {
+      select: {
+        first_name: true,
+        last_name: true,
+        ci: true,
+        status: true
+      }
+    }
+  },
+  orderBy: {
+    upload_date: 'desc'
+  }
+});
+```
+
+### Find Faces for Active Users
+
+```typescript
+const activeFaces = await prisma.face.findMany({
+  where: {
+    user: {
+      status: true
+    }
+  },
+  include: {
+    user: {
+      select: {
+        user_id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        user_type: true
+      }
+    }
+  }
+});
+```
+
+### Count Faces per User
+
+```typescript
+const usersWithFaceCounts = await prisma.user.findMany({
+  include: {
+    _count: {
+      select: { faces: true }
+    }
+  }
+});
+```
+
+### Delete All Faces for a User
+
+```typescript
+const deletedFaces = await prisma.face.deleteMany({
+  where: {
+    user_id: 1
+  }
+});
+```
+
+### Find Faces with Images
+
+```typescript
+const facesWithImages = await prisma.face.findMany({
+  where: {
+    image_path: {
+      not: null
+    }
+  },
+  include: {
+    user: true
+  },
+  orderBy: {
+    upload_date: 'desc'
+  }
+});
+```
+
+## Use Cases
+
+### Multiple Faces per User
+
+Users can have multiple face encodings to improve recognition accuracy:
+- Different angles or lighting conditions
+- Updated encodings as appearance changes
+- Historical encodings for audit purposes
+
+### Encoding Format
+
+The `encoding` field typically stores:
+- Face recognition library output (e.g., face_recognition, dlib)
+- Serialized numerical vectors (128-dimension, 512-dimension, etc.)
+- JSON or comma-separated values format
+
+### Image Storage
+
+The optional `image_path` field allows:
+- Storing reference images for verification
+- Re-encoding if algorithm improves
+- Audit trail and compliance requirements
+
+## Database Mapping
+
+This model maps to the `faces` table in the database.

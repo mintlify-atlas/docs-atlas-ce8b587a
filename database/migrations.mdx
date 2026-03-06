@@ -1,0 +1,573 @@
+---
+title: 'Database Migrations'
+description: 'Guide to managing database schema changes and migrations in BD Scan Face'
+---
+
+## Overview
+
+BD Scan Face uses Prisma Migrate to manage database schema changes. Migrations provide a version-controlled, reproducible way to evolve your database schema over time while preserving data integrity.
+
+<Note>
+All migrations are stored in the `prisma/migrations` directory and should be committed to version control.
+</Note>
+
+## How Migrations Work
+
+Prisma Migrate tracks changes to your `schema.prisma` file and generates SQL migration files that can be applied to your database. Each migration is timestamped and stored in a separate directory.
+
+### Migration Workflow
+
+```mermaid
+graph LR
+    A[Edit schema.prisma] --> B[Create Migration]
+    B --> C[Review SQL]
+    C --> D[Apply Migration]
+    D --> E[Update Database]
+    E --> F[Commit to Git]
+```
+
+## Configuration
+
+The migration configuration is defined in `prisma.config.ts`:
+
+```typescript
+import "dotenv/config";
+import { defineConfig } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+  },
+  datasource: {
+    url: process.env["DATABASE_URL"],
+  },
+});
+```
+
+**Configuration Options:**
+- `schema`: Path to the Prisma schema file
+- `migrations.path`: Directory where migration files are stored
+- `datasource.url`: Database connection string from environment variables
+
+<Warning>
+Never commit your `.env` file with `DATABASE_URL` to version control. Always use environment variables for database credentials.
+</Warning>
+
+## Initial Migration
+
+The project includes an initial migration that creates all the base tables and relationships.
+
+### Migration: `20260303012434_init`
+
+This is the foundational migration that sets up the entire database schema.
+
+<Accordion title="View Initial Migration SQL">
+
+```sql
+-- CreateTable
+CREATE TABLE "user_types" (
+    "user_type_id" SERIAL NOT NULL,
+    "type_name" VARCHAR(50) NOT NULL,
+
+    CONSTRAINT "user_types_pkey" PRIMARY KEY ("user_type_id")
+);
+
+-- CreateTable
+CREATE TABLE "users" (
+    "user_id" SERIAL NOT NULL,
+    "ci" VARCHAR(20) NOT NULL,
+    "first_name" VARCHAR(100) NOT NULL,
+    "last_name" VARCHAR(100) NOT NULL,
+    "email" VARCHAR(100) NOT NULL,
+    "phone" VARCHAR(20),
+    "user_type_id" INTEGER NOT NULL,
+    "code" INTEGER NOT NULL,
+    "status" BOOLEAN NOT NULL DEFAULT true,
+    "registration_date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "users_pkey" PRIMARY KEY ("user_id")
+);
+
+-- CreateTable
+CREATE TABLE "faces" (
+    "face_id" SERIAL NOT NULL,
+    "user_id" INTEGER NOT NULL,
+    "encoding" TEXT NOT NULL,
+    "image_path" TEXT,
+    "upload_date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "faces_pkey" PRIMARY KEY ("face_id")
+);
+
+-- CreateTable
+CREATE TABLE "devices" (
+    "device_id" SERIAL NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "location" VARCHAR(100),
+    "ip_address" VARCHAR(50),
+    "status" BOOLEAN NOT NULL DEFAULT true,
+    "registration_date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "devices_pkey" PRIMARY KEY ("device_id")
+);
+
+-- CreateTable
+CREATE TABLE "access_logs" (
+    "log_id" SERIAL NOT NULL,
+    "user_id" INTEGER,
+    "device_id" INTEGER NOT NULL,
+    "access_date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "confidence" DECIMAL(5,2) NOT NULL,
+    "access_type" VARCHAR(20),
+    "status" VARCHAR(20),
+    "enterCode" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "access_logs_pkey" PRIMARY KEY ("log_id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "user_types_type_name_key" ON "user_types"("type_name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_ci_key" ON "users"("ci");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_code_key" ON "users"("code");
+
+-- AddForeignKey
+ALTER TABLE "users" ADD CONSTRAINT "users_user_type_id_fkey" 
+  FOREIGN KEY ("user_type_id") REFERENCES "user_types"("user_type_id") 
+  ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "faces" ADD CONSTRAINT "faces_user_id_fkey" 
+  FOREIGN KEY ("user_id") REFERENCES "users"("user_id") 
+  ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "access_logs" ADD CONSTRAINT "access_logs_user_id_fkey" 
+  FOREIGN KEY ("user_id") REFERENCES "users"("user_id") 
+  ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "access_logs" ADD CONSTRAINT "access_logs_device_id_fkey" 
+  FOREIGN KEY ("device_id") REFERENCES "devices"("device_id") 
+  ON DELETE RESTRICT ON UPDATE CASCADE;
+```
+
+</Accordion>
+
+### What the Initial Migration Creates
+
+<Tabs>
+  <Tab title="Tables">
+    - `user_types`: User classification table
+    - `users`: Main user information table
+    - `faces`: Facial recognition encodings
+    - `devices`: Access control devices
+    - `access_logs`: Audit trail of all access attempts
+  </Tab>
+  <Tab title="Indexes">
+    - Unique index on `user_types.type_name`
+    - Unique index on `users.ci`
+    - Unique index on `users.email`
+    - Unique index on `users.code`
+  </Tab>
+  <Tab title="Constraints">
+    - Primary keys on all tables
+    - Foreign key relationships with appropriate cascade rules
+    - Unique constraints for data integrity
+    - Default values for status flags and timestamps
+  </Tab>
+</Tabs>
+
+## Creating New Migrations
+
+### Step 1: Modify the Schema
+
+Edit your `prisma/schema.prisma` file to add, modify, or remove models and fields.
+
+**Example: Adding a new field**
+```prisma
+model User {
+  // ... existing fields
+  profile_picture String?   @db.VarChar(255)
+  // ... rest of model
+}
+```
+
+### Step 2: Create the Migration
+
+Run the Prisma migrate command to create a new migration:
+
+```bash
+npx prisma migrate dev --name add_profile_picture
+```
+
+This command:
+1. Analyzes your schema changes
+2. Generates SQL migration files
+3. Applies the migration to your development database
+4. Regenerates the Prisma Client
+
+<Note>
+Use descriptive migration names that explain what the migration does (e.g., `add_profile_picture`, `remove_deprecated_fields`, `add_role_based_access`).
+</Note>
+
+### Step 3: Review the Migration
+
+Prisma creates a new directory in `prisma/migrations/` with:
+- A timestamp and your migration name
+- A `migration.sql` file containing the SQL commands
+
+Always review the generated SQL to ensure it matches your expectations.
+
+### Step 4: Commit to Version Control
+
+Commit both the schema changes and the migration files:
+
+```bash
+git add prisma/schema.prisma
+git add prisma/migrations/
+git commit -m "Add profile picture field to User model"
+```
+
+## Applying Migrations
+
+### Development Environment
+
+In development, use `migrate dev` to create and apply migrations:
+
+```bash
+npx prisma migrate dev
+```
+
+This command:
+- Creates new migrations if schema changed
+- Applies pending migrations
+- Regenerates Prisma Client
+- Seeds the database (if seed script exists)
+
+### Production Environment
+
+In production, use `migrate deploy` to apply migrations without creating new ones:
+
+```bash
+npx prisma migrate deploy
+```
+
+This command:
+- Applies all pending migrations
+- Does NOT create new migrations
+- Does NOT regenerate Prisma Client
+- Safe for CI/CD pipelines
+
+<Warning>
+**Production Migration Checklist:**
+- Always test migrations in a staging environment first
+- Back up your database before applying migrations
+- Review migration SQL for performance implications
+- Plan for downtime if needed for large schema changes
+</Warning>
+
+### CI/CD Integration
+
+Example GitHub Actions workflow:
+
+```yaml
+- name: Run database migrations
+  run: npx prisma migrate deploy
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+- name: Generate Prisma Client
+  run: npx prisma generate
+```
+
+## Migration Commands Reference
+
+<Accordion title="prisma migrate dev">
+
+### Usage
+```bash
+npx prisma migrate dev [options]
+```
+
+### Options
+- `--name <name>`: Specify a name for the migration
+- `--create-only`: Create migration without applying it
+- `--skip-seed`: Skip running the seed script
+- `--skip-generate`: Skip generating Prisma Client
+
+### Description
+Creates and applies migrations in development. Use this command when actively developing and modifying your schema.
+
+### Example
+```bash
+npx prisma migrate dev --name add_user_preferences
+```
+
+</Accordion>
+
+<Accordion title="prisma migrate deploy">
+
+### Usage
+```bash
+npx prisma migrate deploy
+```
+
+### Description
+Applies all pending migrations to the database. This is the production-safe command that should be used in CI/CD pipelines.
+
+### Example
+```bash
+DATABASE_URL="postgresql://user:pass@host:5432/db" npx prisma migrate deploy
+```
+
+</Accordion>
+
+<Accordion title="prisma migrate status">
+
+### Usage
+```bash
+npx prisma migrate status
+```
+
+### Description
+Shows the status of all migrations, including which have been applied and which are pending.
+
+### Output Example
+```
+Status
+1 migration found in prisma/migrations
+
+The following migration has not yet been applied:
+20260304120000_add_profile_picture
+```
+
+</Accordion>
+
+<Accordion title="prisma migrate resolve">
+
+### Usage
+```bash
+npx prisma migrate resolve --applied <migration_name>
+npx prisma migrate resolve --rolled-back <migration_name>
+```
+
+### Description
+Manually marks a migration as applied or rolled back. Use this to resolve migration conflicts or fix migration history issues.
+
+### Example
+```bash
+npx prisma migrate resolve --applied 20260304120000_add_profile_picture
+```
+
+<Warning>
+Only use this command if you understand the migration state. Incorrectly resolving migrations can lead to schema inconsistencies.
+</Warning>
+
+</Accordion>
+
+<Accordion title="prisma migrate reset">
+
+### Usage
+```bash
+npx prisma migrate reset
+```
+
+### Description
+Deletes the database and recreates it, applying all migrations from scratch. Also runs seed scripts.
+
+<Warning>
+**DESTRUCTIVE COMMAND**: This will delete all data in your database. Only use in development.
+</Warning>
+
+### Example
+```bash
+npx prisma migrate reset --skip-seed
+```
+
+</Accordion>
+
+## Migration Best Practices
+
+### 1. Always Review Generated SQL
+
+Before applying migrations, review the SQL to ensure:
+- Indexes are created for frequently queried fields
+- Foreign key constraints are appropriate
+- Data types are optimal for your use case
+- No unintended data loss will occur
+
+### 2. Test Migrations Thoroughly
+
+```bash
+# Create a migration without applying it
+npx prisma migrate dev --create-only --name my_migration
+
+# Review the SQL in prisma/migrations/
+
+# Apply the migration
+npx prisma migrate dev
+```
+
+### 3. Handle Data Migrations
+
+For complex schema changes that require data transformation:
+
+```sql
+-- migration.sql
+
+-- Add new column
+ALTER TABLE "users" ADD COLUMN "full_name" VARCHAR(200);
+
+-- Migrate existing data
+UPDATE "users" SET "full_name" = CONCAT("first_name", ' ', "last_name");
+
+-- Make column required
+ALTER TABLE "users" ALTER COLUMN "full_name" SET NOT NULL;
+```
+
+### 4. Use Descriptive Migration Names
+
+<Tabs>
+  <Tab title="Good Names">
+    - `add_user_profile_picture`
+    - `remove_deprecated_device_fields`
+    - `add_indexes_for_access_log_queries`
+    - `migrate_user_type_to_enum`
+  </Tab>
+  <Tab title="Bad Names">
+    - `update`
+    - `changes`
+    - `fix`
+    - `migration_1`
+  </Tab>
+</Tabs>
+
+### 5. Never Edit Applied Migrations
+
+Once a migration has been applied (especially in production), never modify its SQL file. Instead:
+1. Create a new migration to make additional changes
+2. Use `prisma migrate resolve` if needed to fix migration history
+
+### 6. Backup Before Major Changes
+
+```bash
+# PostgreSQL backup example
+pg_dump -U username -d database_name -F c -f backup_before_migration.dump
+
+# Apply migration
+npx prisma migrate deploy
+
+# If something goes wrong, restore
+pg_restore -U username -d database_name backup_before_migration.dump
+```
+
+### 7. Use Transactions for Safety
+
+Prisma migrations run in transactions by default, ensuring atomicity. If any part fails, the entire migration is rolled back.
+
+## Troubleshooting
+
+### Migration Failed to Apply
+
+**Problem**: Migration fails due to constraint violations or data issues.
+
+**Solution**:
+```bash
+# Check migration status
+npx prisma migrate status
+
+# Review the error message
+# Fix the underlying data issue
+# Re-run the migration
+npx prisma migrate deploy
+```
+
+### Out of Sync Schema
+
+**Problem**: Schema file doesn't match database state.
+
+**Solution**:
+```bash
+# Pull current database schema
+npx prisma db pull
+
+# Compare with your schema.prisma
+# Resolve conflicts
+# Create new migration
+npx prisma migrate dev --name sync_schema
+```
+
+### Migration History Conflicts
+
+**Problem**: Migration history in database doesn't match local migrations.
+
+**Solution**:
+```bash
+# Check status
+npx prisma migrate status
+
+# If migration was manually applied, mark it as resolved
+npx prisma migrate resolve --applied <migration_name>
+
+# If migration should be skipped
+npx prisma migrate resolve --rolled-back <migration_name>
+```
+
+## Advanced: Custom Migrations
+
+For scenarios where Prisma's auto-generated migrations aren't sufficient:
+
+### 1. Create Empty Migration
+
+```bash
+npx prisma migrate dev --create-only --name custom_migration
+```
+
+### 2. Edit the SQL File
+
+Add your custom SQL to `prisma/migrations/[timestamp]_custom_migration/migration.sql`:
+
+```sql
+-- Custom index for better query performance
+CREATE INDEX CONCURRENTLY "idx_access_logs_date_user" 
+ON "access_logs" ("access_date", "user_id") 
+WHERE "status" = 'granted';
+
+-- Custom function for audit logging
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 3. Apply the Migration
+
+```bash
+npx prisma migrate dev
+```
+
+<Note>
+Custom migrations should be documented in comments to help other developers understand their purpose.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Schema Overview" icon="sitemap" href="/database/schema">
+    Review the complete database schema
+  </Card>
+  <Card title="Model Reference" icon="database" href="/database/models">
+    Detailed documentation for each model
+  </Card>
+</CardGroup>

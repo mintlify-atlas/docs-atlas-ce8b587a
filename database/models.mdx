@@ -1,0 +1,607 @@
+---
+title: 'Database Models'
+description: 'Detailed documentation of all database models and their relationships'
+---
+
+## Overview
+
+This page provides in-depth documentation for each model in the BD Scan Face database. Each model is designed to support specific aspects of the facial recognition access control system.
+
+<Note>
+All models use auto-incrementing integer primary keys and include appropriate foreign key relationships for data integrity.
+</Note>
+
+## Model Reference
+
+<Accordion title="UserType Model">
+
+### Purpose
+
+The `UserType` model defines different categories of users in the system, such as administrators, employees, visitors, or contractors. This allows for role-based access control and different permission levels.
+
+### Schema Definition
+
+```prisma
+model UserType {
+  user_type_id Int    @id @default(autoincrement())
+  type_name    String @unique @db.VarChar(50)
+
+  users User[]
+
+  @@map("user_types")
+}
+```
+
+### Fields
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `user_type_id` | Int | Primary Key, Auto-increment | Unique identifier for the user type |
+| `type_name` | String | Unique, Max 50 chars | Name of the user type (e.g., "Administrator", "Employee") |
+
+### Relationships
+
+- **users**: One-to-many relationship with the `User` model. A user type can be assigned to multiple users.
+
+### Database Mapping
+
+Maps to the `user_types` table in PostgreSQL.
+
+### Usage Example
+
+```typescript
+// Create a new user type
+const userType = await prisma.userType.create({
+  data: {
+    type_name: 'Employee'
+  }
+});
+
+// Get all users of a specific type
+const employeeType = await prisma.userType.findUnique({
+  where: { type_name: 'Employee' },
+  include: { users: true }
+});
+```
+
+### Constraints
+
+- The `type_name` field must be unique across all user types
+- Cannot be deleted if users are still assigned to this type (foreign key constraint)
+
+</Accordion>
+
+<Accordion title="User Model">
+
+### Purpose
+
+The `User` model represents individuals who are authorized to access facilities. It stores personal information, authentication credentials, and links to facial recognition data.
+
+### Schema Definition
+
+```prisma
+model User {
+  user_id           Int       @id @default(autoincrement())
+  ci                String    @unique @db.VarChar(20)
+  first_name        String    @db.VarChar(100)
+  last_name         String    @db.VarChar(100)
+  email             String    @unique @db.VarChar(100)
+  phone             String?   @db.VarChar(20)
+  user_type_id      Int
+  code              Int       @unique
+  status            Boolean   @default(true)
+  registration_date DateTime  @default(now())
+
+  user_type   UserType     @relation(fields: [user_type_id], references: [user_type_id])
+  faces       Face[]
+  access_logs AccessLog[]
+
+  @@map("users")
+}
+```
+
+### Fields
+
+| Field | Type | Constraints | Default | Description |
+|-------|------|-------------|---------|-------------|
+| `user_id` | Int | Primary Key, Auto-increment | - | Unique identifier for the user |
+| `ci` | String | Unique, Max 20 chars | - | Identification document number (e.g., national ID, passport) |
+| `first_name` | String | Max 100 chars | - | User's first name |
+| `last_name` | String | Max 100 chars | - | User's last name |
+| `email` | String | Unique, Max 100 chars | - | User's email address |
+| `phone` | String? | Optional, Max 20 chars | null | User's phone number |
+| `user_type_id` | Int | Foreign Key | - | Reference to the user's type |
+| `code` | Int | Unique | - | Numeric code for manual access entry |
+| `status` | Boolean | - | true | Whether the user is active in the system |
+| `registration_date` | DateTime | - | now() | Timestamp when the user was registered |
+
+### Relationships
+
+- **user_type**: Many-to-one relationship with `UserType`. Each user belongs to one user type.
+- **faces**: One-to-many relationship with `Face`. A user can have multiple facial encodings registered.
+- **access_logs**: One-to-many relationship with `AccessLog`. Tracks all access attempts by this user.
+
+### Database Mapping
+
+Maps to the `users` table in PostgreSQL.
+
+### Usage Example
+
+```typescript
+// Create a new user with facial recognition
+const user = await prisma.user.create({
+  data: {
+    ci: '1234567890',
+    first_name: 'John',
+    last_name: 'Doe',
+    email: 'john.doe@example.com',
+    phone: '+1234567890',
+    code: 1234,
+    user_type_id: 1,
+    faces: {
+      create: {
+        encoding: 'base64_encoded_face_data',
+        image_path: '/uploads/faces/john_doe.jpg'
+      }
+    }
+  },
+  include: {
+    user_type: true,
+    faces: true
+  }
+});
+
+// Get user with all access logs
+const userWithLogs = await prisma.user.findUnique({
+  where: { user_id: 1 },
+  include: {
+    access_logs: {
+      orderBy: { access_date: 'desc' },
+      take: 10
+    }
+  }
+});
+```
+
+### Constraints
+
+- `ci`, `email`, and `code` must be unique across all users
+- `user_type_id` must reference a valid user type
+- Cannot be deleted if facial encodings or access logs exist (foreign key constraint)
+
+<Warning>
+The `code` field should be kept confidential as it can be used for manual access entry when facial recognition is unavailable.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Face Model">
+
+### Purpose
+
+The `Face` model stores facial recognition encodings for users. Multiple face encodings can be registered for a single user to improve recognition accuracy across different angles and lighting conditions.
+
+### Schema Definition
+
+```prisma
+model Face {
+  face_id     Int       @id @default(autoincrement())
+  user_id     Int
+  encoding    String
+  image_path  String?
+  upload_date DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [user_id])
+
+  @@map("faces")
+}
+```
+
+### Fields
+
+| Field | Type | Constraints | Default | Description |
+|-------|------|-------------|---------|-------------|
+| `face_id` | Int | Primary Key, Auto-increment | - | Unique identifier for the face encoding |
+| `user_id` | Int | Foreign Key | - | Reference to the user this face belongs to |
+| `encoding` | String | Text | - | Base64-encoded facial recognition vector data |
+| `image_path` | String? | Optional, Text | null | Path to the original face image file |
+| `upload_date` | DateTime | - | now() | Timestamp when the face was registered |
+
+### Relationships
+
+- **user**: Many-to-one relationship with `User`. Each face encoding belongs to one user.
+
+### Database Mapping
+
+Maps to the `faces` table in PostgreSQL.
+
+### Usage Example
+
+```typescript
+// Add a new face encoding for an existing user
+const face = await prisma.face.create({
+  data: {
+    user_id: 1,
+    encoding: 'base64_encoded_128d_vector',
+    image_path: '/uploads/faces/user_1_profile.jpg'
+  }
+});
+
+// Get all faces for a user
+const userFaces = await prisma.face.findMany({
+  where: { user_id: 1 },
+  orderBy: { upload_date: 'desc' }
+});
+
+// Update face encoding
+const updatedFace = await prisma.face.update({
+  where: { face_id: 1 },
+  data: { 
+    encoding: 'new_encoded_data',
+    image_path: '/uploads/faces/user_1_updated.jpg'
+  }
+});
+```
+
+### Constraints
+
+- `user_id` must reference a valid user
+- Cannot be created for a deleted user (foreign key constraint)
+
+<Note>
+The encoding field stores the facial recognition vector as a string. The actual format depends on the face recognition library being used (e.g., face-api.js, OpenCV).
+</Note>
+
+### Best Practices
+
+1. **Multiple Encodings**: Register 2-3 face encodings per user from different angles for better recognition accuracy
+2. **Image Storage**: Store the original image in `image_path` for audit purposes and potential re-encoding
+3. **Encoding Format**: Use consistent encoding format across all face records
+4. **Regular Updates**: Consider updating face encodings periodically as appearance changes
+
+</Accordion>
+
+<Accordion title="Device Model">
+
+### Purpose
+
+The `Device` model represents physical access control hardware such as cameras, facial recognition scanners, or access terminals deployed throughout facilities.
+
+### Schema Definition
+
+```prisma
+model Device {
+  device_id         Int       @id @default(autoincrement())
+  name              String    @db.VarChar(100)
+  location          String?   @db.VarChar(100)
+  ip_address        String?   @db.VarChar(50)
+  status            Boolean   @default(true)
+  registration_date DateTime  @default(now())
+
+  access_logs AccessLog[]
+
+  @@map("devices")
+}
+```
+
+### Fields
+
+| Field | Type | Constraints | Default | Description |
+|-------|------|-------------|---------|-------------|
+| `device_id` | Int | Primary Key, Auto-increment | - | Unique identifier for the device |
+| `name` | String | Max 100 chars | - | Descriptive name for the device |
+| `location` | String? | Optional, Max 100 chars | null | Physical location of the device |
+| `ip_address` | String? | Optional, Max 50 chars | null | IP address for network-connected devices |
+| `status` | Boolean | - | true | Whether the device is active and operational |
+| `registration_date` | DateTime | - | now() | Timestamp when the device was registered |
+
+### Relationships
+
+- **access_logs**: One-to-many relationship with `AccessLog`. Tracks all access attempts recorded by this device.
+
+### Database Mapping
+
+Maps to the `devices` table in PostgreSQL.
+
+### Usage Example
+
+```typescript
+// Register a new device
+const device = await prisma.device.create({
+  data: {
+    name: 'Main Entrance Scanner',
+    location: 'Building A - Floor 1',
+    ip_address: '192.168.1.100',
+    status: true
+  }
+});
+
+// Get device with recent access logs
+const deviceWithLogs = await prisma.device.findUnique({
+  where: { device_id: 1 },
+  include: {
+    access_logs: {
+      orderBy: { access_date: 'desc' },
+      take: 50,
+      include: { user: true }
+    }
+  }
+});
+
+// Deactivate a device
+const deactivated = await prisma.device.update({
+  where: { device_id: 1 },
+  data: { status: false }
+});
+
+// Get all active devices in a location
+const activeDevices = await prisma.device.findMany({
+  where: {
+    status: true,
+    location: { contains: 'Building A' }
+  }
+});
+```
+
+### Constraints
+
+- Cannot be deleted if access logs exist for this device (foreign key constraint)
+
+### Device Status Management
+
+The `status` field indicates whether a device is:
+- **Active (true)**: Currently operational and recording access attempts
+- **Inactive (false)**: Disabled, under maintenance, or decommissioned
+
+<Warning>
+Inactive devices should not be deleted from the database to preserve historical access log data. Use the status field to disable devices instead.
+</Warning>
+
+</Accordion>
+
+<Accordion title="AccessLog Model">
+
+### Purpose
+
+The `AccessLog` model records all access attempts in the system, whether successful or failed. It provides a complete audit trail of facility access and facial recognition performance.
+
+### Schema Definition
+
+```prisma
+model AccessLog {
+  log_id      Int       @id @default(autoincrement())
+  user_id     Int?
+  device_id   Int
+  access_date DateTime  @default(now())
+  confidence  Decimal   @db.Decimal(5, 2)
+  access_type String?   @db.VarChar(20)
+  status      String?   @db.VarChar(20)
+  enterCode   Boolean   @default(false)
+
+  user   User?   @relation(fields: [user_id], references: [user_id])
+  device Device  @relation(fields: [device_id], references: [device_id])
+
+  @@map("access_logs")
+}
+```
+
+### Fields
+
+| Field | Type | Constraints | Default | Description |
+|-------|------|-------------|---------|-------------|
+| `log_id` | Int | Primary Key, Auto-increment | - | Unique identifier for the access log entry |
+| `user_id` | Int? | Optional, Foreign Key | null | Reference to the user (null for unrecognized attempts) |
+| `device_id` | Int | Foreign Key | - | Reference to the device that recorded the access |
+| `access_date` | DateTime | - | now() | Timestamp of the access attempt |
+| `confidence` | Decimal(5,2) | Precision 5, Scale 2 | - | Recognition confidence score (0.00 to 100.00) |
+| `access_type` | String? | Optional, Max 20 chars | null | Type of access (e.g., "entry", "exit") |
+| `status` | String? | Optional, Max 20 chars | null | Status of the attempt (e.g., "granted", "denied") |
+| `enterCode` | Boolean | - | false | Whether manual code entry was used instead of face recognition |
+
+### Relationships
+
+- **user**: Many-to-one relationship with `User` (optional). Links to the recognized user, or null if unrecognized.
+- **device**: Many-to-one relationship with `Device`. Identifies which device recorded the access.
+
+### Database Mapping
+
+Maps to the `access_logs` table in PostgreSQL.
+
+### Usage Example
+
+```typescript
+// Record a successful facial recognition access
+const accessLog = await prisma.accessLog.create({
+  data: {
+    user_id: 1,
+    device_id: 1,
+    confidence: 98.75,
+    access_type: 'entry',
+    status: 'granted',
+    enterCode: false
+  },
+  include: {
+    user: true,
+    device: true
+  }
+});
+
+// Record a failed recognition attempt (no user identified)
+const failedLog = await prisma.accessLog.create({
+  data: {
+    user_id: null,
+    device_id: 1,
+    confidence: 45.20,
+    access_type: 'entry',
+    status: 'denied',
+    enterCode: false
+  }
+});
+
+// Record manual code entry access
+const codeLog = await prisma.accessLog.create({
+  data: {
+    user_id: 1,
+    device_id: 1,
+    confidence: 100.00,
+    access_type: 'entry',
+    status: 'granted',
+    enterCode: true
+  }
+});
+
+// Get access logs for a specific user
+const userLogs = await prisma.accessLog.findMany({
+  where: { user_id: 1 },
+  orderBy: { access_date: 'desc' },
+  include: { device: true }
+});
+
+// Get access logs by device and date range
+const deviceLogs = await prisma.accessLog.findMany({
+  where: {
+    device_id: 1,
+    access_date: {
+      gte: new Date('2026-03-01'),
+      lte: new Date('2026-03-31')
+    }
+  },
+  include: { user: true }
+});
+```
+
+### Constraints
+
+- `device_id` must reference a valid device
+- `user_id` (when not null) must reference a valid user
+- If the referenced user is deleted, `user_id` is set to NULL to preserve the log
+
+### Field Details
+
+#### Confidence Score
+The `confidence` field represents the facial recognition algorithm's confidence level:
+- **90-100**: High confidence, very likely a match
+- **70-89**: Medium confidence, probable match
+- **50-69**: Low confidence, uncertain match
+- **0-49**: Very low confidence, likely not a match
+
+#### Access Type
+Common values for `access_type`:
+- `"entry"`: User entering a facility
+- `"exit"`: User exiting a facility
+- `null`: Type not specified
+
+#### Status
+Common values for `status`:
+- `"granted"`: Access was allowed
+- `"denied"`: Access was refused
+- `"pending"`: Access requires manual approval
+- `null`: Status not specified
+
+#### Enter Code Flag
+The `enterCode` boolean indicates:
+- `true`: User entered their numeric code manually (no facial recognition used)
+- `false`: Facial recognition was used
+
+<Note>
+The nullable `user_id` field is critical for logging unrecognized access attempts. This helps identify potential security issues and improve the facial recognition system.
+</Note>
+
+### Analytics Use Cases
+
+```typescript
+// Get average confidence scores by user
+const avgConfidence = await prisma.accessLog.groupBy({
+  by: ['user_id'],
+  _avg: { confidence: true },
+  where: { user_id: { not: null } }
+});
+
+// Count access attempts by device
+const accessCount = await prisma.accessLog.groupBy({
+  by: ['device_id'],
+  _count: { log_id: true },
+  orderBy: { _count: { log_id: 'desc' } }
+});
+
+// Get failed access attempts (low confidence)
+const failedAttempts = await prisma.accessLog.findMany({
+  where: {
+    confidence: { lt: 50 },
+    status: 'denied'
+  },
+  include: { device: true },
+  orderBy: { access_date: 'desc' }
+});
+```
+
+</Accordion>
+
+## Common Queries
+
+### User Management
+
+```typescript
+// Get all active users with their faces and recent access
+const activeUsers = await prisma.user.findMany({
+  where: { status: true },
+  include: {
+    user_type: true,
+    faces: true,
+    access_logs: {
+      orderBy: { access_date: 'desc' },
+      take: 5
+    }
+  }
+});
+
+// Find users by email domain
+const companyUsers = await prisma.user.findMany({
+  where: {
+    email: { endsWith: '@company.com' }
+  }
+});
+```
+
+### Access Reporting
+
+```typescript
+// Get today's access logs
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+const todayLogs = await prisma.accessLog.findMany({
+  where: {
+    access_date: { gte: today }
+  },
+  include: {
+    user: true,
+    device: true
+  },
+  orderBy: { access_date: 'desc' }
+});
+
+// Get access logs for a specific device and date range
+const deviceReport = await prisma.accessLog.findMany({
+  where: {
+    device_id: 1,
+    access_date: {
+      gte: new Date('2026-03-01'),
+      lte: new Date('2026-03-31')
+    },
+    status: 'granted'
+  },
+  include: { user: true }
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Schema Overview" icon="sitemap" href="/database/schema">
+    View the complete database schema and relationships
+  </Card>
+  <Card title="Migrations" icon="arrow-progress" href="/database/migrations">
+    Learn how to manage database migrations
+  </Card>
+</CardGroup>

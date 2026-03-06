@@ -1,0 +1,296 @@
+---
+title: 'Environment Setup'
+description: 'Complete guide to setting up your BD Scan Face development environment'
+icon: 'wrench'
+---
+
+This guide walks you through setting up the BD Scan Face application from scratch, including database configuration, environment variables, and dependency installation.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Node.js** (v16 or higher)
+- **npm** or **yarn** package manager
+- **Docker** and **Docker Compose** (for database)
+- **PostgreSQL** (if not using Docker)
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the BD Scan Face repository to your local machine:
+
+    ```bash
+    git clone https://github.com/ErnestoJuarez2708/BD_Scan_Face.git
+    cd BD_Scan_Face
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    Install all required npm packages:
+
+    ```bash
+    npm install
+    ```
+
+    This will install key dependencies including:
+    - `@prisma/client` (v6.19.2) - Prisma ORM client
+    - `@prisma/adapter-pg` (v7.4.2) - PostgreSQL adapter
+    - `prisma` (v7.4.2) - Prisma CLI and tooling
+    - `pg` (v8.19.0) - PostgreSQL driver
+    - `dotenv` (v17.3.1) - Environment variable management
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the project root with your database connection settings:
+
+    ```bash .env
+    DATABASE_URL="postgresql://postgres:prisma@localhost:5432/postgres?schema=public"
+    ```
+
+    <Note>
+      The `DATABASE_URL` format is: `postgresql://[USER]:[PASSWORD]@[HOST]:[PORT]/[DATABASE]?schema=public`
+    </Note>
+
+    ### Environment Variable Breakdown
+
+    | Variable | Description | Default Value |
+    |----------|-------------|---------------|
+    | `DATABASE_URL` | PostgreSQL connection string | Required |
+
+    <Tip>
+      If using the provided Docker Compose setup, the default credentials are:
+      - **User**: `postgres`
+      - **Password**: `prisma`
+      - **Database**: `postgres`
+      - **Port**: `5432`
+    </Tip>
+  </Step>
+
+  <Step title="Start the Database">
+    Use Docker Compose to start the PostgreSQL database:
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    Verify the database is running:
+
+    ```bash
+    docker-compose ps
+    ```
+
+    You should see the `postgres` service running and healthy.
+  </Step>
+
+  <Step title="Run Database Migrations">
+    Apply Prisma migrations to set up your database schema:
+
+    ```bash
+    npx prisma migrate deploy
+    ```
+
+    Or if you're in development:
+
+    ```bash
+    npx prisma migrate dev
+    ```
+
+    This creates all necessary tables: `users`, `user_types`, `faces`, `devices`, and `access_logs`.
+  </Step>
+
+  <Step title="Generate Prisma Client">
+    Generate the Prisma Client with the current schema:
+
+    ```bash
+    npx prisma generate
+    ```
+
+    The client will be generated in the `generated/prisma` directory as configured in your schema.
+  </Step>
+</Steps>
+
+## Database Connection Configuration
+
+### Prisma Configuration
+
+The project uses a custom Prisma configuration file (`prisma.config.ts`) that defines the schema location and migration paths:
+
+```typescript prisma.config.ts
+import "dotenv/config";
+import { defineConfig } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+  },
+  datasource: {
+    url: process.env["DATABASE_URL"],
+  },
+});
+```
+
+<Note>
+  The configuration automatically loads environment variables using `dotenv/config`, so your `.env` file will be read automatically.
+</Note>
+
+### Connection String Formats
+
+<CodeGroup>
+
+```bash Local Development
+DATABASE_URL="postgresql://postgres:prisma@localhost:5432/postgres?schema=public"
+```
+
+```bash Docker Network
+DATABASE_URL="postgresql://postgres:prisma@postgres:5432/postgres?schema=public"
+```
+
+```bash Production (with SSL)
+DATABASE_URL="postgresql://user:password@host:5432/database?schema=public&sslmode=require"
+```
+
+```bash Connection Pooling
+DATABASE_URL="postgresql://user:password@host:5432/database?schema=public&connection_limit=10&pool_timeout=20"
+```
+
+</CodeGroup>
+
+## Verifying Your Setup
+
+### Check Database Connection
+
+Test your database connection using Prisma Studio:
+
+```bash
+npx prisma studio
+```
+
+This opens a web interface at `http://localhost:5555` where you can view and manage your database.
+
+### Verify Schema
+
+Check that all tables were created correctly:
+
+```bash
+npx prisma db pull
+```
+
+This introspects your database and verifies it matches the schema.
+
+## Troubleshooting
+
+### Connection Refused
+
+<Warning>
+  **Error**: `Error: connect ECONNREFUSED 127.0.0.1:5432`
+</Warning>
+
+**Solution**: Ensure PostgreSQL is running:
+
+```bash
+# Check if Docker container is running
+docker-compose ps
+
+# View container logs
+docker-compose logs postgres
+
+# Restart the database
+docker-compose restart postgres
+```
+
+### Authentication Failed
+
+<Warning>
+  **Error**: `Error: P1001: Can't reach database server`
+</Warning>
+
+**Solution**: Verify your credentials in the `.env` file match the Docker Compose configuration:
+
+- Check `POSTGRES_USER` in `docker-compose.yml` matches the username in `DATABASE_URL`
+- Check `POSTGRES_PASSWORD` in `docker-compose.yml` matches the password in `DATABASE_URL`
+- Check `POSTGRES_DB` in `docker-compose.yml` matches the database name in `DATABASE_URL`
+
+### Migration Errors
+
+<Warning>
+  **Error**: `Migration engine error: Database does not exist`
+</Warning>
+
+**Solution**: Create the database first:
+
+```bash
+# Using psql
+docker exec -it bd_scan_face_postgres_1 psql -U postgres -c "CREATE DATABASE postgres;"
+
+# Or reset the database
+npx prisma migrate reset
+```
+
+### Port Already in Use
+
+<Warning>
+  **Error**: `Bind for 0.0.0.0:5432 failed: port is already allocated`
+</Warning>
+
+**Solution**: Either stop the conflicting service or change the port in `docker-compose.yml`:
+
+```yaml docker-compose.yml
+ports:
+  - "5433:5432"  # Changed external port
+```
+
+Then update your `DATABASE_URL`:
+
+```bash
+DATABASE_URL="postgresql://postgres:prisma@localhost:5433/postgres?schema=public"
+```
+
+### Prisma Client Not Found
+
+<Warning>
+  **Error**: `Cannot find module '@prisma/client'`
+</Warning>
+
+**Solution**: Regenerate the Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+### Schema Out of Sync
+
+<Warning>
+  **Error**: `Prisma schema loaded from prisma/schema.prisma is not in sync with the database`
+</Warning>
+
+**Solution**: Apply pending migrations:
+
+```bash
+npx prisma migrate deploy
+```
+
+Or reset the database (development only):
+
+```bash
+npx prisma migrate reset
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prisma Client Usage" icon="database" href="/guides/prisma-client">
+    Learn how to use Prisma Client for database operations
+  </Card>
+  <Card title="Docker Configuration" icon="docker" href="/guides/docker">
+    Deep dive into the Docker Compose setup
+  </Card>
+  <Card title="Database Schema" icon="table" href="/database/schema">
+    Explore the complete database schema
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/user">
+    View model API reference and usage examples
+  </Card>
+</CardGroup>
